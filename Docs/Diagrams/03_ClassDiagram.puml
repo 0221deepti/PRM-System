@@ -1,0 +1,520 @@
+@startuml Class_Diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam ClassBkgColor #E1F5FE
+skinparam ClassBorderColor #0277BD
+skinparam ClassFontColor #000000
+skinparam ArrowColor #333333
+skinparam NoteBkgColor #FFF9E6
+skinparam NoteBorderColor #FFA500
+
+title PRM System - Class Diagram
+
+package "PRM.Domain" {
+    abstract class BaseEntity {
+        #int Id
+        #DateTime CreatedAt
+        #DateTime UpdatedAt
+    }
+
+    enum UserRole {
+        Admin
+        Manager
+        Employee
+    }
+
+    enum EmployeeStatus {
+        Bench
+        Allocated
+        OnLeave
+    }
+
+    enum ProjectStatus {
+        Planning
+        InProgress
+        OnHold
+        Completed
+    }
+
+    enum ProjectHealthStatus {
+        OnTrack
+        AtRisk
+        OffTrack
+    }
+
+    enum MilestoneStatus {
+        NotStarted
+        InProgress
+        Completed
+        Blocked
+    }
+
+    enum SkillCategory {
+        Technical
+        Business
+        Soft
+    }
+
+    enum SkillProficiency {
+        Beginner
+        Intermediate
+        Expert
+    }
+
+    class User {
+        -string FullName
+        -string Email
+        -string Username
+        -string PasswordHash
+        -UserRole Role
+        -bool IsActive
+        -bool ForcePasswordChange
+        --
+        +Employee? Employee
+    }
+
+    class Employee {
+        -int UserId
+        -string Department
+        -EmployeeStatus Status
+        -int? ManagerId
+        --
+        +User User
+        +Employee? Manager
+        +ICollection<Employee> DirectReports
+        +ICollection<EmployeeSkill> Skills
+        +ICollection<Allocation> Allocations
+        +ICollection<Timesheet> Timesheets
+    }
+
+    class Project {
+        -string Name
+        -string Description
+        -DateOnly StartDate
+        -DateOnly EndDate
+        -ProjectStatus Status
+        -int ManagerId
+        -int TotalStoryPoints
+        -ProjectHealthStatus HealthStatus
+        --
+        +Employee Manager
+        +ICollection<Milestone> Milestones
+        +ICollection<Allocation> Allocations
+    }
+
+    class Milestone {
+        -int ProjectId
+        -string Title
+        -DateOnly DueDate
+        -int StoryPoints
+        -MilestoneStatus Status
+        --
+        +Project Project
+    }
+
+    class Allocation {
+        -int EmployeeId
+        -int ProjectId
+        -int UtilisationPercent
+        -DateOnly FromDate
+        -DateOnly ToDate
+        -bool IsActive
+        --
+        +Employee Employee
+        +Project Project
+    }
+
+    class Skill {
+        -string Name
+        -SkillCategory Category
+        --
+        +ICollection<EmployeeSkill> EmployeeSkills
+    }
+
+    class EmployeeSkill {
+        -int EmployeeId
+        -int SkillId
+        -SkillProficiency Proficiency
+        --
+        +Employee Employee
+        +Skill Skill
+    }
+
+    class Timesheet {
+        -int EmployeeId
+        -int ProjectId
+        -DateOnly WeekStartDate
+        -decimal HoursWorked
+        -string ActivityTags
+        --
+        +Employee Employee
+        +Project Project
+    }
+
+    class SystemConfig {
+        -string LlmProvider
+        -string LlmApiKey
+        -int SchedulerIntervalHours
+        -int MaxWeeklyHours
+    }
+}
+
+package "PRM.Application" {
+    interface IUserRepository {
+        +GetByIdAsync(int id, CancellationToken ct)
+        +GetByUsernameAsync(string username, CancellationToken ct)
+        +GetAllAsync(CancellationToken ct)
+        +CreateAsync(User user, CancellationToken ct)
+        +Update(User user)
+        +SaveChangesAsync(CancellationToken ct)
+    }
+
+    interface IEmployeeRepository {
+        +GetByIdAsync(int id, CancellationToken ct)
+        +GetByUserIdAsync(int userId, CancellationToken ct)
+        +GetAllAsync(CancellationToken ct)
+        +CreateAsync(Employee employee, CancellationToken ct)
+        +Update(Employee employee)
+        +SaveChangesAsync(CancellationToken ct)
+    }
+
+    interface IProjectRepository {
+        +GetByIdAsync(int id, CancellationToken ct)
+        +GetByManagerIdAsync(int managerId, CancellationToken ct)
+        +GetAllAsync(CancellationToken ct)
+        +CreateAsync(Project project, CancellationToken ct)
+        +Update(Project project)
+        +SaveChangesAsync(CancellationToken ct)
+    }
+
+    interface IAllocationRepository {
+        +GetByIdAsync(int id, CancellationToken ct)
+        +GetByEmployeeIdAsync(int employeeId, CancellationToken ct)
+        +GetByProjectIdAsync(int projectId, CancellationToken ct)
+        +GetActiveAllocationsAsync(int employeeId, CancellationToken ct)
+        +CreateAsync(Allocation allocation, CancellationToken ct)
+        +SaveChangesAsync(CancellationToken ct)
+    }
+
+    interface ITimesheetRepository {
+        +GetByIdAsync(int id, CancellationToken ct)
+        +GetByEmployeeIdAsync(int employeeId, CancellationToken ct)
+        +CreateAsync(Timesheet timesheet, CancellationToken ct)
+        +SaveChangesAsync(CancellationToken ct)
+    }
+
+    interface IAuthService {
+        +LoginAsync(string username, string password, CancellationToken ct)
+        +ChangePasswordAsync(int userId, string newPassword, CancellationToken ct)
+        +ResetPasswordAsync(int targetUserId, string newPassword, CancellationToken ct)
+    }
+
+    interface IProjectService {
+        +CreateProjectAsync(CreateProjectDto dto, CancellationToken ct)
+        +GetAllProjectsAsync(CancellationToken ct)
+        +GetProjectDetailAsync(int id, CancellationToken ct)
+        +UpdateProjectAsync(int id, UpdateProjectDto dto, CancellationToken ct)
+        +GetManagerProjectsAsync(int managerEmpId, CancellationToken ct)
+    }
+
+    interface IAllocationService {
+        +CreateAllocationAsync(CreateAllocationDto dto, CancellationToken ct)
+        +GetAllocationsAsync(int employeeId, CancellationToken ct)
+        +UpdateAllocationAsync(int id, UpdateAllocationDto dto, CancellationToken ct)
+    }
+
+    interface ITimesheetService {
+        +SubmitTimesheetAsync(CreateTimesheetDto dto, CancellationToken ct)
+        +GetTimesheetAsync(int employeeId, DateOnly weekStart, CancellationToken ct)
+        +AnalyzeTimesheetAsync(int timesheetId, CancellationToken ct)
+    }
+
+    interface IEmployeeService {
+        +GetEmployeeAsync(int id, CancellationToken ct)
+        +GetAllEmployeesAsync(CancellationToken ct)
+        +UpdateEmployeeAsync(int id, UpdateEmployeeDto dto, CancellationToken ct)
+        +GetEmployeeSkillsAsync(int employeeId, CancellationToken ct)
+    }
+
+    class AuthService {
+        -IUserRepository _users
+        -IEmployeeRepository _employees
+        -ITokenService _tokenService
+        --
+        +LoginAsync(string username, string password, CancellationToken ct)
+        +ChangePasswordAsync(int userId, string newPassword, CancellationToken ct)
+        +ResetPasswordAsync(int targetUserId, string newPassword, CancellationToken ct)
+        -ValidatePasswordStrength(string password)
+    }
+
+    class ProjectService {
+        -IProjectRepository _projects
+        -IAllocationRepository _allocations
+        --
+        +CreateProjectAsync(CreateProjectDto dto, CancellationToken ct)
+        +GetAllProjectsAsync(CancellationToken ct)
+        +UpdateProjectAsync(int id, UpdateProjectDto dto, CancellationToken ct)
+    }
+
+    class AllocationService {
+        -IAllocationRepository _allocations
+        -IEmployeeRepository _employees
+        -IProjectRepository _projects
+        --
+        +CreateAllocationAsync(CreateAllocationDto dto, CancellationToken ct)
+        +GetAllocationsAsync(int employeeId, CancellationToken ct)
+    }
+
+    class TimesheetService {
+        -ITimesheetRepository _timesheets
+        -ISystemConfigRepository _config
+        -IAiService _aiService
+        --
+        +SubmitTimesheetAsync(CreateTimesheetDto dto, CancellationToken ct)
+        +GetTimesheetAsync(int employeeId, DateOnly weekStart, CancellationToken ct)
+        -ValidateHours(decimal hours, int maxWeeklyHours)
+    }
+}
+
+package "PRM.Api" {
+    class AuthController {
+        -IAuthService _authService
+        --
+        +Login(LoginRequestDto dto, CancellationToken ct): IActionResult
+        +ChangePassword(ChangePasswordDto dto, CancellationToken ct): IActionResult
+        +ResetPassword(int userId, ResetPasswordDto dto, CancellationToken ct): IActionResult
+    }
+
+    class ProjectsController {
+        -IProjectService _projectService
+        -IMilestoneService _milestoneService
+        --
+        +Create(CreateProjectDto dto, CancellationToken ct): IActionResult
+        +GetAll(string scope, CancellationToken ct): IActionResult
+        +GetDetail(int id, CancellationToken ct): IActionResult
+        +Update(int id, UpdateProjectDto dto, CancellationToken ct): IActionResult
+    }
+
+    class AllocationsController {
+        -IAllocationService _allocationService
+        --
+        +Create(CreateAllocationDto dto, CancellationToken ct): IActionResult
+        +GetByEmployee(int employeeId, CancellationToken ct): IActionResult
+        +Update(int id, UpdateAllocationDto dto, CancellationToken ct): IActionResult
+    }
+
+    class TimesheetsController {
+        -ITimesheetService _timesheetService
+        --
+        +Submit(CreateTimesheetDto dto, CancellationToken ct): IActionResult
+        +Get(int employeeId, DateOnly weekStart, CancellationToken ct): IActionResult
+        +Analyze(int id, CancellationToken ct): IActionResult
+    }
+
+    class EmployeesController {
+        -IEmployeeService _employeeService
+        --
+        +GetAll(CancellationToken ct): IActionResult
+        +GetDetail(int id, CancellationToken ct): IActionResult
+        +Update(int id, UpdateEmployeeDto dto, CancellationToken ct): IActionResult
+    }
+}
+
+package "PRM.Client" {
+    class SessionContext {
+        +int UserId
+        +int EmployeeId
+        +string UserFullName
+        +UserRole Role
+        +bool IsLoggedIn
+        --
+        +Clear()
+    }
+
+    class AppServices {
+        -SessionContext _session
+        -AuthHttpClient _authClient
+        -UserHttpClient _userClient
+        -EmployeeHttpClient _employeeClient
+        -ProjectHttpClient _projectClient
+        -AllocationHttpClient _allocationClient
+        -TimesheetHttpClient _timesheetClient
+        -ConfigHttpClient _configClient
+        -AiHttpClient _aiClient
+    }
+
+    abstract class Screen {
+        #AppServices _services
+        +{abstract} RenderAsync(): Task<bool>
+    }
+
+    class LoginScreen {
+        +RenderAsync(): Task<bool>
+    }
+
+    class AdminMenuScreen {
+        +RenderAsync(): Task<bool>
+    }
+
+    class ManagerMenuScreen {
+        +RenderAsync(): Task<bool>
+    }
+
+    class EmployeeMenuScreen {
+        +RenderAsync(): Task<bool>
+    }
+}
+
+package "PRM.Infrastructure" {
+    class PrmDbContext {
+        +DbSet<User> Users
+        +DbSet<Employee> Employees
+        +DbSet<Skill> Skills
+        +DbSet<EmployeeSkill> EmployeeSkills
+        +DbSet<Project> Projects
+        +DbSet<Milestone> Milestones
+        +DbSet<Allocation> Allocations
+        +DbSet<Timesheet> Timesheets
+        +DbSet<SystemConfig> SystemConfigs
+        --
+        +OnModelCreating(ModelBuilder modelBuilder)
+        +SaveChangesAsync(CancellationToken ct): Task<int>
+    }
+
+    class UserRepository {
+        -PrmDbContext _context
+        --
+        +GetByIdAsync(int id, CancellationToken ct)
+        +GetByUsernameAsync(string username, CancellationToken ct)
+    }
+
+    class EmployeeRepository {
+        -PrmDbContext _context
+        --
+        +GetByIdAsync(int id, CancellationToken ct)
+        +GetByUserIdAsync(int userId, CancellationToken ct)
+    }
+
+    class ProjectRepository {
+        -PrmDbContext _context
+        --
+        +GetByIdAsync(int id, CancellationToken ct)
+        +GetByManagerIdAsync(int managerId, CancellationToken ct)
+    }
+
+    class AllocationRepository {
+        -PrmDbContext _context
+        --
+        +GetByIdAsync(int id, CancellationToken ct)
+        +GetByEmployeeIdAsync(int employeeId, CancellationToken ct)
+    }
+
+    class TimesheetRepository {
+        -PrmDbContext _context
+        --
+        +GetByIdAsync(int id, CancellationToken ct)
+        +GetByEmployeeIdAsync(int employeeId, CancellationToken ct)
+    }
+
+    interface ITokenService {
+        +GenerateToken(User user, int employeeId): string
+        +ValidateToken(string token): ClaimsPrincipal
+    }
+
+    class TokenService {
+        -IConfiguration _config
+        --
+        +GenerateToken(User user, int employeeId): string
+        +ValidateToken(string token): ClaimsPrincipal
+    }
+
+    interface IAiService {
+        +AnalyzeTimesheetAsync(Timesheet timesheet): Task<string>
+        +GenerateRecommendations(): Task<string>
+    }
+
+    class AiService {
+        -HttpClient _httpClient
+        -ISystemConfigRepository _config
+        --
+        +AnalyzeTimesheetAsync(Timesheet timesheet): Task<string>
+    }
+}
+
+BaseEntity <|-- User
+BaseEntity <|-- Employee
+BaseEntity <|-- Project
+BaseEntity <|-- Milestone
+BaseEntity <|-- Allocation
+BaseEntity <|-- Skill
+BaseEntity <|-- EmployeeSkill
+BaseEntity <|-- Timesheet
+BaseEntity <|-- SystemConfig
+
+User "1" --> "0..1" Employee: has
+Employee "1" --> "0..*" Employee: manages
+Employee "1" --> "0..*" EmployeeSkill: has
+Employee "1" --> "0..*" Allocation: allocated
+Employee "1" --> "0..*" Timesheet: submits
+Project "1" --> "1" Employee: managed by
+Project "1" --> "0..*" Milestone: contains
+Project "1" --> "0..*" Allocation: has
+Skill "1" --> "0..*" EmployeeSkill: belongs to
+Allocation "1" --> "1" Employee: assigned to
+Allocation "1" --> "1" Project: assigned to
+Timesheet "1" --> "1" Employee: submitted by
+Timesheet "1" --> "1" Project: for
+Milestone "1" --> "1" Project: belongs to
+
+AuthService ..|> IAuthService
+ProjectService ..|> IProjectService
+AllocationService ..|> IAllocationService
+TimesheetService ..|> ITimesheetService
+
+AuthService --> IUserRepository
+AuthService --> IEmployeeRepository
+AuthService --> ITokenService
+
+ProjectService --> IProjectRepository
+ProjectService --> IAllocationRepository
+
+AllocationService --> IAllocationRepository
+AllocationService --> IEmployeeRepository
+AllocationService --> IProjectRepository
+
+TimesheetService --> ITimesheetRepository
+TimesheetService --> ISystemConfigRepository
+TimesheetService --> IAiService
+
+UserRepository ..|> IUserRepository
+EmployeeRepository ..|> IEmployeeRepository
+ProjectRepository ..|> IProjectRepository
+AllocationRepository ..|> IAllocationRepository
+TimesheetRepository ..|> ITimesheetRepository
+
+TokenService ..|> ITokenService
+AiService ..|> IAiService
+
+UserRepository --> PrmDbContext
+EmployeeRepository --> PrmDbContext
+ProjectRepository --> PrmDbContext
+AllocationRepository --> PrmDbContext
+TimesheetRepository --> PrmDbContext
+
+AuthController --> IAuthService
+ProjectsController --> IProjectService
+AllocationsController --> IAllocationService
+TimesheetsController --> ITimesheetService
+EmployeesController --> IEmployeeService
+
+SessionContext --> UserRole
+Screen <|-- LoginScreen
+Screen <|-- AdminMenuScreen
+Screen <|-- ManagerMenuScreen
+Screen <|-- EmployeeMenuScreen
+
+AppServices --> SessionContext
+AppServices --> AuthController
+AppServices --> ProjectsController
+
+@enduml

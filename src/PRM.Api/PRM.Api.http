@@ -1,0 +1,6 @@
+@PRM.Api_HostAddress = http://localhost:5016
+
+GET {{PRM.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
