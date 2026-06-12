@@ -11,13 +11,24 @@ public static class DbInitializer
         if (await db.Users.AnyAsync())
             return; // Already seeded
 
+        // Create roles
+        var adminRole = new Role { Name = "Admin" };
+        var managerRole = new Role { Name = "Manager" };
+        var employeeRole = new Role { Name = "Employee" };
+
+        await db.Roles.AddAsync(adminRole);
+        await db.Roles.AddAsync(managerRole);
+        await db.Roles.AddAsync(employeeRole);
+        await db.SaveChangesAsync();
+
+        // Create admin user
         var adminUser = new User
         {
             FullName = "System Admin",
             Email = "admin@prm.local",
             Username = "admin",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@1234"),
-            Role = UserRole.Admin,
+            RoleId = adminRole.Id,
             IsActive = true,
             ForcePasswordChange = true  // must change on first login
         };

@@ -18,18 +18,18 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
     public async Task<Project?> GetWithMilestonesAsync(int projectId, CancellationToken ct = default)
         => await _set
             .Include(p => p.Milestones)
-            .Include(p => p.Manager).ThenInclude(e => e.User)
+            .Include(p => p.Manager)
             .FirstOrDefaultAsync(p => p.Id == projectId, ct);
 
     public async Task<Project?> GetWithAllocationsAsync(int projectId, CancellationToken ct = default)
         => await _set
             .Include(p => p.Milestones)
-            .Include(p => p.Allocations).ThenInclude(a => a.Employee).ThenInclude(e => e.User)
+            .Include(p => p.Allocations).ThenInclude(a => a.User)
             .FirstOrDefaultAsync(p => p.Id == projectId, ct);
 
     public async Task<IEnumerable<Project>> GetAllWithDetailsAsync(CancellationToken ct = default)
         => await _set
-            .Include(p => p.Manager).ThenInclude(e => e.User)
+            .Include(p => p.Manager)
             .Include(p => p.Milestones)
             .ToListAsync(ct);
 }

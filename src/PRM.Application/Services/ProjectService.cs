@@ -41,7 +41,7 @@ public class ProjectService : IProjectService
         var manager = await _employees.GetWithSkillsAsync(dto.ManagerId, ct);
         return new ProjectSummaryDto(
             project.Id, project.Name,
-            manager?.User?.FullName ?? "",
+            manager?.FullName ?? "",
             project.EndDate, project.Status,
             project.HealthStatus, 0,
             project.TotalStoryPoints);
@@ -88,7 +88,7 @@ public class ProjectService : IProjectService
         var donePoints = p.Milestones.Where(m => m.Status == MilestoneStatus.Done).Sum(m => m.StoryPoints);
         return new ProjectSummaryDto(
             p.Id, p.Name,
-            p.Manager?.User?.FullName ?? "",
+            p.Manager?.FullName ?? "",
             p.EndDate, p.Status, p.HealthStatus,
             donePoints, p.TotalStoryPoints);
     }
@@ -99,16 +99,16 @@ public class ProjectService : IProjectService
             new MilestoneSummaryDto(m.Id, m.Title, m.DueDate, m.StoryPoints, m.Status)).ToList();
 
         var allocations = p.Allocations.Where(a => a.IsActive).Select(a =>
-            new AllocationSummaryDto(
-                a.Id, a.EmployeeId,
-                a.Employee?.User?.FullName ?? "",
+            new ProjectAllocationSummaryDto(
+                a.Id, a.UserId,
+                a.User?.FullName ?? "",
                 a.ProjectId, p.Name,
                 a.UtilisationPercent, a.FromDate, a.ToDate)).ToList();
 
         return new ProjectDetailDto(
             p.Id, p.Name, p.Description,
             p.StartDate, p.EndDate, p.Status, p.HealthStatus,
-            p.ManagerId, p.Manager?.User?.FullName ?? "",
+            p.ManagerId, p.Manager?.FullName ?? "",
             p.TotalStoryPoints, milestones, allocations);
     }
 }

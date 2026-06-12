@@ -6,46 +6,58 @@ using PRM.Infrastructure.Persistence;
 
 namespace PRM.Infrastructure.Persistence.Repositories;
 
-public class EmployeeRepository : Repository<Employee>, IEmployeeRepository
+/// <summary>
+/// Employee repository - after refactoring, this works with User entity.
+/// Provides specialized queries for employee/team management.
+/// </summary>
+public class EmployeeRepository : Repository<User>, IEmployeeRepository
 {
     public EmployeeRepository(PrmDbContext db) : base(db) { }
 
-    public async Task<IEnumerable<Employee>> GetByManagerIdAsync(int managerId, CancellationToken ct = default)
+    /// <summary>Get team members managed by a specific user</summary>
+    public async Task<IEnumerable<User>> GetByManagerIdAsync(int managerId, CancellationToken ct = default)
         => await _set
-            .Include(e => e.User)
-            .Include(e => e.Skills).ThenInclude(s => s.Skill)
-            .Include(e => e.Allocations)
-            .Where(e => e.ManagerId == managerId && e.User.IsActive)
+            .Include(u => u.Skills).ThenInclude(us => us.Skill)
+            .Include(u => u.Allocations)
+            .Include(u => u.Role)
+            .Where(u => u.ManagerId == managerId && u.IsActive)
             .ToListAsync(ct);
 
-    public async Task<IEnumerable<Employee>> GetBenchEmployeesAsync(int managerId, CancellationToken ct = default)
+    /// <summary>Get bench (unallocated) employees for a manager</summary>
+    public async Task<IEnumerable<User>> GetBenchEmployeesAsync(int managerId, CancellationToken ct = default)
         => await _set
-            .Include(e => e.User)
-            .Include(e => e.Skills).ThenInclude(s => s.Skill)
-            .Where(e => e.ManagerId == managerId && e.Status == EmployeeStatus.Bench && e.User.IsActive)
+            .Include(u => u.Skills).ThenInclude(us => us.Skill)
+            .Include(u => u.Role)
+            .Where(u => u.ManagerId == managerId && u.Status == EmployeeStatus.Bench && u.IsActive)
             .ToListAsync(ct);
 
-    public async Task<Employee?> GetWithSkillsAsync(int employeeId, CancellationToken ct = default)
+    /// <summary>Get employee with all skills loaded</summary>
+    public async Task<User?> GetWithSkillsAsync(int employeeId, CancellationToken ct = default)
         => await _set
-            .Include(e => e.User)
-            .Include(e => e.Skills).ThenInclude(s => s.Skill)
-            .FirstOrDefaultAsync(e => e.Id == employeeId, ct);
+            .Include(u => u.Skills).ThenInclude(us => us.Skill)
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Id == employeeId, ct);
 
-    public async Task<Employee?> GetWithAllocationsAsync(int employeeId, CancellationToken ct = default)
+    /// <summary>Get employee with all allocations loaded</summary>
+    public async Task<User?> GetWithAllocationsAsync(int employeeId, CancellationToken ct = default)
         => await _set
-            .Include(e => e.User)
-            .Include(e => e.Allocations).ThenInclude(a => a.Project)
-            .Include(e => e.Skills).ThenInclude(s => s.Skill)
-            .FirstOrDefaultAsync(e => e.Id == employeeId, ct);
+            .Include(u => u.Allocations).ThenInclude(a => a.Project)
+            .Include(u => u.Skills).ThenInclude(us => us.Skill)
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Id == employeeId, ct);
 
-    public async Task<Employee?> GetByUserIdAsync(int userId, CancellationToken ct = default)
+    /// <summary>Get employee by associated user ID (legacy - now same as GetByIdAsync)</summary>
+    public async Task<User?> GetByUserIdAsync(int userId, CancellationToken ct = default)
         => await _set
-            .Include(e => e.User)
-            .FirstOrDefaultAsync(e => e.UserId == userId, ct);
+            .Include(u => u.Skills).ThenInclude(us => us.Skill)
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Id == userId, ct);
 
-    public async Task<IEnumerable<Employee>> GetAllWithDetailsAsync(CancellationToken ct = default)
+    /// <summary>Get all employees with full details</summary>
+    public async Task<IEnumerable<User>> GetAllWithDetailsAsync(CancellationToken ct = default)
         => await _set
-            .Include(e => e.User)
-            .Include(e => e.Skills).ThenInclude(s => s.Skill)
+            .Include(u => u.Skills).ThenInclude(us => us.Skill)
+            .Include(u => u.Allocations)
+            .Include(u => u.Role)
             .ToListAsync(ct);
 }

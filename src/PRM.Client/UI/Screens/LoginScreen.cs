@@ -1,4 +1,5 @@
 using PRM.Client.UI;
+using PRM.Domain.Enums;
 
 namespace PRM.Client.UI.Screens;
 
@@ -15,16 +16,25 @@ public class LoginScreen : Screen
 
         try
         {
-            await _services.Auth.LoginAsync(username, password);
+            var loginResult = await _services.Auth.LoginAsync(username, password);
             ConsoleRenderer.RenderSuccess($"Welcome back, {_services.Session.UserFullName}!");
             ConsoleRenderer.Pause();
 
-            // Password reset check is usually handled by a custom claim or DB flag,
-            // but for simplicity, we could just check if password is 'admin123'
-            if (password == "admin123" && _services.Session.Role == Domain.Enums.UserRole.Admin)
+            // If the backend indicates the user must change password on first login,
+            // force employees and managers to change it now.
+            if (loginResult.ForcePasswordChange &&
+                (loginResult.RoleName == "Employee" || loginResult.RoleName == "Manager"))
             {
-                ConsoleRenderer.RenderWarning("You are using the default admin password. Please change it.");
-                await new ChangePasswordScreen(_services).RenderAsync();
+                ConsoleRenderer.RenderWarning("You must change your temporary password before proceeding.");
+                // Loop until password successfully changed (ChangePasswordScreen returns false on success)
+                var keepShowing = true;
+                while (keepShowing)
+                {
+                    var cont = await new ChangePasswordScreen(_services).RenderAsync();
+                    // RenderAsync returns false on success (we want to stop showing), true on error (retry)
+                    keepShowing = cont;
+                    if (!keepShowing) break;
+                }
             }
 
             return false; // Exit login loop to go to main menu

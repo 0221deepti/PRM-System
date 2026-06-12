@@ -8,5 +8,5 @@ public class Skill : BaseEntity
     public SkillCategory Category { get; set; }
 
     // Navigation
-    public ICollection<EmployeeSkill> EmployeeSkills { get; set; } = new List<EmployeeSkill>();
+    public ICollection<UserSkill> UserSkills { get; set; } = new List<UserSkill>();
 }

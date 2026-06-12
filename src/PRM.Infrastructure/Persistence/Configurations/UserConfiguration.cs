@@ -14,5 +14,18 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Email).HasMaxLength(256).IsRequired();
         builder.Property(u => u.FullName).HasMaxLength(200).IsRequired();
         builder.Property(u => u.PasswordHash).IsRequired();
+        builder.Property(u => u.Department).HasMaxLength(100).IsRequired();
+
+        // Foreign key to Role
+        builder.HasOne(u => u.Role)
+               .WithMany(r => r.Users)
+               .HasForeignKey(u => u.RoleId)
+               .OnDelete(DeleteBehavior.Restrict);
+
+        // Self-referencing foreign key to Manager
+        builder.HasOne(u => u.Manager)
+               .WithMany(u => u.DirectReports)
+               .HasForeignKey(u => u.ManagerId)
+               .OnDelete(DeleteBehavior.SetNull);
     }
 }

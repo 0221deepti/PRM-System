@@ -9,12 +9,12 @@ public class Project : BaseEntity
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public ProjectStatus Status { get; set; }
-    public int ManagerId { get; set; }  // FK → Employee
+    public int ManagerId { get; set; }  // FK → User
     public int TotalStoryPoints { get; set; }
     public ProjectHealthStatus HealthStatus { get; set; } = ProjectHealthStatus.OnTrack;
 
     // Navigation
-    public Employee Manager { get; set; } = null!;
+    public User Manager { get; set; } = null!;
     public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public ICollection<Allocation> Allocations { get; set; } = new List<Allocation>();
 }

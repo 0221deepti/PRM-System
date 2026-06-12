@@ -76,7 +76,7 @@ public class EmployeeService : IEmployeeService
         }
 
         // Deactivate user account
-        var user = await _users.GetByIdAsync(employee.UserId, ct);
+        var user = await _users.GetByIdAsync(employee.Id, ct);
         if (user != null)
         {
             user.IsActive = false;
@@ -101,9 +101,9 @@ public class EmployeeService : IEmployeeService
         await _employees.SaveChangesAsync(ct);
     }
 
-    private async Task<EmployeeDetailDto> BuildDetailDto(Employee employee, CancellationToken ct)
+    private async Task<EmployeeDetailDto> BuildDetailDto(User employee, CancellationToken ct)
     {
-        Employee? manager = null;
+        User? manager = null;
         if (employee.ManagerId.HasValue)
             manager = await _employees.GetWithSkillsAsync(employee.ManagerId.Value, ct);
 
@@ -120,17 +120,17 @@ public class EmployeeService : IEmployeeService
             .ToList();
 
         return new EmployeeDetailDto(
-            employee.Id, employee.UserId,
-            employee.User?.FullName ?? "",
+            employee.Id, employee.Id,
+            employee.FullName ?? "",
             employee.Department, employee.Status,
             employee.ManagerId,
-            manager?.User?.FullName,
+            manager?.FullName,
             skills, activeAllocations,
             new List<string>());
     }
 
-    private static EmployeeSummaryDto MapToSummary(Employee e) =>
-        new(e.Id, e.UserId, e.User?.FullName ?? "", e.Department, e.Status, e.User?.IsActive ?? false);
+    private static EmployeeSummaryDto MapToSummary(User e) =>
+        new(e.Id, e.Id, e.FullName ?? "", e.Department, e.Status, e.IsActive);
 }
 
 public class SkillService : ISkillService

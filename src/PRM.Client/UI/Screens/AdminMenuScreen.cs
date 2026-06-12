@@ -23,24 +23,19 @@ public class AdminMenuScreen : Screen
         switch (choice)
         {
             case "1":
-                ConsoleRenderer.RenderWarning("Manage Users screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new ManageUsersScreen(_services).RenderAsync();
                 break;
             case "2":
-                ConsoleRenderer.RenderWarning("Manage Employees screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new ManageEmployeesScreen(_services).RenderAsync();
                 break;
             case "3":
-                ConsoleRenderer.RenderWarning("Manage Projects screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new ManageProjectsScreen(_services).RenderAsync();
                 break;
             case "4":
-                ConsoleRenderer.RenderWarning("View Allocations screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new ViewAllocationsScreen(_services).RenderAsync();
                 break;
             case "5":
-                ConsoleRenderer.RenderWarning("System Configuration screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new SystemConfigScreen(_services).RenderAsync();
                 break;
             case "0":
                 return false; // go back

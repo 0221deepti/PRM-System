@@ -11,21 +11,30 @@ public class TimesheetService : ITimesheetService
     private readonly ITimesheetRepository _timesheets;
     private readonly IAllocationRepository _allocations;
     private readonly ISystemConfigRepository _config;
-    private readonly IEmployeeRepository _employees;
+    private readonly IUserRepository _users;
+    private readonly IRepository<ActivityTag> _tags;
+    private readonly IRepository<TimesheetEntry> _entries;
+    private readonly IRepository<TimesheetEntryTag> _entryTags;
 
     public TimesheetService(
         ITimesheetRepository timesheets,
         IAllocationRepository allocations,
         ISystemConfigRepository config,
-        IEmployeeRepository employees)
+        IUserRepository users,
+        IRepository<ActivityTag> tags,
+        IRepository<TimesheetEntry> entries,
+        IRepository<TimesheetEntryTag> entryTags)
     {
         _timesheets = timesheets;
         _allocations = allocations;
         _config = config;
-        _employees = employees;
+        _users = users;
+        _tags = tags;
+        _entries = entries;
+        _entryTags = entryTags;
     }
 
-    public async Task SubmitAsync(SubmitTimesheetDto dto, int employeeId, CancellationToken ct)
+    public async Task SubmitAsync(SubmitTimesheetDto dto, int userId, CancellationToken ct)
     {
         var config = await _config.GetAsync(ct);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -33,11 +42,11 @@ public class TimesheetService : ITimesheetService
         if (dto.WeekStartDate > today)
             throw new DomainException("Cannot submit a timesheet for a future week.");
 
-        if (await _timesheets.ExistsAsync(employeeId, dto.ProjectId, dto.WeekStartDate, ct))
+        if (await _timesheets.ExistsAsync(userId, dto.ProjectId, dto.WeekStartDate, ct))
             throw new DuplicateTimesheetException("A timesheet for this project and week already exists.");
 
-        // Verify the employee is allocated to this project during the week
-        var activeAllocations = await _allocations.GetActiveByEmployeeAsync(employeeId, ct);
+        // Verify the user is allocated to this project during the week
+        var activeAllocations = await _allocations.GetActiveByUserAsync(userId, ct);
         var allocation = activeAllocations.FirstOrDefault(a =>
             a.ProjectId == dto.ProjectId &&
             a.FromDate <= dto.WeekStartDate &&
@@ -51,56 +60,57 @@ public class TimesheetService : ITimesheetService
             throw new DomainException(
                 $"Hours logged ({dto.HoursWorked}) exceed the allowed maximum for this allocation ({maxHoursForProject} hrs).");
 
-        var totalThisWeek = await _timesheets.GetTotalHoursForWeekAsync(employeeId, dto.WeekStartDate, ct);
+        var totalThisWeek = await _timesheets.GetTotalHoursForWeekAsync(userId, dto.WeekStartDate, ct);
         if (totalThisWeek + dto.HoursWorked > config.MaxWeeklyHours)
             throw new DomainException(
                 $"Total hours this week would exceed {config.MaxWeeklyHours} hrs.");
 
         var timesheet = new Timesheet
         {
-            EmployeeId = employeeId,
+            UserId = userId,
             ProjectId = dto.ProjectId,
             WeekStartDate = dto.WeekStartDate,
-            HoursWorked = dto.HoursWorked,
-            ActivityTags = string.Join(",", dto.ActivityTags)
+            TotalHoursWorked = dto.HoursWorked
         };
 
         await _timesheets.AddAsync(timesheet, ct);
         await _timesheets.SaveChangesAsync(ct);
     }
 
-    public async Task<IEnumerable<TimesheetSummaryDto>> GetMyTimesheetsAsync(int employeeId, CancellationToken ct)
+    public async Task<IEnumerable<TimesheetSummaryDto>> GetMyTimesheetsAsync(int userId, CancellationToken ct)
     {
-        var timesheets = await _timesheets.GetByEmployeeAsync(employeeId, ct);
+        var timesheets = await _timesheets.GetByUserAsync(userId, ct);
         return timesheets.Select(t => new TimesheetSummaryDto(
             t.Id, t.ProjectId, t.Project?.Name ?? "",
-            t.WeekStartDate, t.HoursWorked, t.ActivityTags, true));
+            t.WeekStartDate, t.TotalHoursWorked,
+            string.Join(",", t.Entries.SelectMany(e => e.Tags.Select(tag => tag.ActivityTag.Name))),
+            true));
     }
 
     public async Task<IEnumerable<TeamTimesheetEntryDto>> GetTeamTimesheetsAsync(int managerId, DateOnly weekStart, CancellationToken ct)
     {
         var timesheets = await _timesheets.GetByWeekAsync(weekStart, managerId, ct);
         return timesheets.Select(t => new TeamTimesheetEntryDto(
-            t.Employee?.User?.FullName ?? "",
-            t.EmployeeId,
+            t.User?.FullName ?? "",
+            t.UserId,
             t.Project?.Name ?? "",
             t.ProjectId,
-            t.HoursWorked,
+            t.TotalHoursWorked,
             true,
             t.WeekStartDate));
     }
 
-    public async Task<bool> HasMissedLastWeekAsync(int employeeId, CancellationToken ct)
+    public async Task<bool> HasMissedLastWeekAsync(int userId, CancellationToken ct)
     {
         var lastMonday = GetLastMonday();
-        var activeAllocations = await _allocations.GetActiveByEmployeeAsync(employeeId, ct);
+        var activeAllocations = await _allocations.GetActiveByUserAsync(userId, ct);
         var allocationsLastWeek = activeAllocations
             .Where(a => a.FromDate <= lastMonday && a.ToDate >= lastMonday)
             .ToList();
 
         if (!allocationsLastWeek.Any()) return false;
 
-        var timesheets = await _timesheets.GetByEmployeeAsync(employeeId, ct);
+        var timesheets = await _timesheets.GetByUserAsync(userId, ct);
         var submittedProjectIds = timesheets
             .Where(t => t.WeekStartDate == lastMonday)
             .Select(t => t.ProjectId)

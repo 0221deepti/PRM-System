@@ -22,20 +22,16 @@ public class EmployeeMenuScreen : Screen
         switch (choice)
         {
             case "1":
-                ConsoleRenderer.RenderWarning("My Profile screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new MyProfileScreen(_services).RenderAsync();
                 break;
             case "2":
-                ConsoleRenderer.RenderWarning("My Allocations screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new MyAllocationsScreen(_services).RenderAsync();
                 break;
             case "3":
-                ConsoleRenderer.RenderWarning("Submit Timesheet screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new SubmitTimesheetScreen(_services).RenderAsync();
                 break;
             case "4":
-                ConsoleRenderer.RenderWarning("My Timesheets screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new MyTimesheetsScreen(_services).RenderAsync();
                 break;
             case "0":
                 return false;

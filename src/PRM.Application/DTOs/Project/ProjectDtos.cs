@@ -42,7 +42,7 @@ public record ProjectDetailDto(
     string ManagerName,
     int TotalStoryPoints,
     List<MilestoneSummaryDto> Milestones,
-    List<AllocationSummaryDto> Allocations);
+    List<ProjectAllocationSummaryDto> Allocations);
 
 public record MilestoneSummaryDto(
     int Id,
@@ -51,10 +51,10 @@ public record MilestoneSummaryDto(
     int StoryPoints,
     MilestoneStatus Status);
 
-public record AllocationSummaryDto(
+public record ProjectAllocationSummaryDto(
     int Id,
-    int EmployeeId,
-    string EmployeeName,
+    int UserId,
+    string UserName,
     int ProjectId,
     string ProjectName,
     int UtilisationPercent,

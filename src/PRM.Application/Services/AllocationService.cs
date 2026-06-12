@@ -11,20 +11,20 @@ namespace PRM.Application.Services;
 public class AllocationService : IAllocationService
 {
     private readonly IAllocationRepository _allocations;
-    private readonly IEmployeeRepository _employees;
+    private readonly IUserRepository _users;
     private readonly IProjectRepository _projects;
 
     public AllocationService(
         IAllocationRepository allocations,
-        IEmployeeRepository employees,
+        IUserRepository users,
         IProjectRepository projects)
     {
         _allocations = allocations;
-        _employees = employees;
+        _users = users;
         _projects = projects;
     }
 
-    public async Task<AllocationSummaryDto> AllocateAsync(CreateAllocationDto dto, int managerEmployeeId, CancellationToken ct)
+    public async Task<AllocationSummaryDto> AllocateAsync(CreateAllocationDto dto, int managerUserId, CancellationToken ct)
     {
         var project = await _projects.GetByIdAsync(dto.ProjectId, ct)
                       ?? throw new EntityNotFoundException("Project not found.");
@@ -39,7 +39,7 @@ public class AllocationService : IAllocationService
             throw new DomainException("Utilisation percent must be between 1 and 100.");
 
         var existing = await _allocations.GetTotalUtilisationAsync(
-                           dto.EmployeeId, dto.FromDate, dto.ToDate, null, ct);
+                           dto.UserId, dto.FromDate, dto.ToDate, null, ct);
 
         if (existing + dto.UtilisationPercent > 100)
             throw new OverAllocationException(
@@ -47,7 +47,7 @@ public class AllocationService : IAllocationService
 
         var allocation = new Allocation
         {
-            EmployeeId = dto.EmployeeId,
+            UserId = dto.UserId,
             ProjectId = dto.ProjectId,
             UtilisationPercent = dto.UtilisationPercent,
             FromDate = dto.FromDate,
@@ -58,13 +58,13 @@ public class AllocationService : IAllocationService
         await _allocations.AddAsync(allocation, ct);
         await _allocations.SaveChangesAsync(ct);
 
-        await UpdateEmployeeStatusAsync(dto.EmployeeId, ct);
+        await UpdateUserStatusAsync(dto.UserId, ct);
 
-        var employee = await _employees.GetWithSkillsAsync(dto.EmployeeId, ct);
+        var user = await _users.GetWithSkillsAsync(dto.UserId, ct);
         return new AllocationSummaryDto(
             allocation.Id,
-            allocation.EmployeeId,
-            employee?.User?.FullName ?? "",
+            allocation.UserId,
+            user?.FullName ?? "",
             allocation.ProjectId,
             project.Name,
             allocation.UtilisationPercent,
@@ -72,7 +72,7 @@ public class AllocationService : IAllocationService
             allocation.ToDate);
     }
 
-    public async Task EndAllocationAsync(int allocationId, int managerEmployeeId, CancellationToken ct)
+    public async Task EndAllocationAsync(int allocationId, int managerUserId, CancellationToken ct)
     {
         var allocation = await _allocations.GetByIdAsync(allocationId, ct)
                          ?? throw new EntityNotFoundException("Allocation not found.");
@@ -80,7 +80,7 @@ public class AllocationService : IAllocationService
         var project = await _projects.GetByIdAsync(allocation.ProjectId, ct)
                       ?? throw new EntityNotFoundException("Project not found.");
 
-        if (project.ManagerId != managerEmployeeId)
+        if (project.ManagerId != managerUserId)
             throw new PrmUnauthorizedException("Only the project manager can end this allocation.");
 
         allocation.ToDate = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -88,7 +88,7 @@ public class AllocationService : IAllocationService
         _allocations.Update(allocation);
         await _allocations.SaveChangesAsync(ct);
 
-        await UpdateEmployeeStatusAsync(allocation.EmployeeId, ct);
+        await UpdateUserStatusAsync(allocation.UserId, ct);
     }
 
     public async Task<IEnumerable<AllocationSummaryDto>> GetAllAllocationsAsync(CancellationToken ct)
@@ -103,39 +103,39 @@ public class AllocationService : IAllocationService
         return allocations.Select(MapToDto);
     }
 
-    public async Task<IEnumerable<AllocationSummaryDto>> GetMyAllocationsAsync(int employeeId, CancellationToken ct)
+    public async Task<IEnumerable<AllocationSummaryDto>> GetMyAllocationsAsync(int userId, CancellationToken ct)
     {
-        var allocations = await _allocations.GetActiveByEmployeeAsync(employeeId, ct);
+        var allocations = await _allocations.GetActiveByUserAsync(userId, ct);
         return allocations.Select(MapToDto);
     }
 
-    public async Task<IEnumerable<AllocationSummaryDto>> GetActiveAllocationsForWeekAsync(int employeeId, DateOnly weekStart, CancellationToken ct)
+    public async Task<IEnumerable<AllocationSummaryDto>> GetActiveAllocationsForWeekAsync(int userId, DateOnly weekStart, CancellationToken ct)
     {
-        var allocations = await _allocations.GetActiveByEmployeeAsync(employeeId, ct);
+        var allocations = await _allocations.GetActiveByUserAsync(userId, ct);
         return allocations
             .Where(a => a.FromDate <= weekStart && a.ToDate >= weekStart)
             .Select(MapToDto);
     }
 
-    private async Task UpdateEmployeeStatusAsync(int employeeId, CancellationToken ct)
+    private async Task UpdateUserStatusAsync(int userId, CancellationToken ct)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var activeAllocations = await _allocations.GetActiveByEmployeeAsync(employeeId, ct);
+        var activeAllocations = await _allocations.GetActiveByUserAsync(userId, ct);
         var isCurrentlyAllocated = activeAllocations.Any(a => a.FromDate <= today && a.ToDate >= today);
 
-        var employee = await _employees.GetByIdAsync(employeeId, ct);
-        if (employee != null)
+        var user = await _users.GetByIdAsync(userId, ct);
+        if (user != null)
         {
-            employee.Status = isCurrentlyAllocated ? EmployeeStatus.Allocated : EmployeeStatus.Bench;
-            _employees.Update(employee);
-            await _employees.SaveChangesAsync(ct);
+            user.Status = isCurrentlyAllocated ? EmployeeStatus.Allocated : EmployeeStatus.Bench;
+            _users.Update(user);
+            await _users.SaveChangesAsync(ct);
         }
     }
 
     private static AllocationSummaryDto MapToDto(Allocation a) =>
         new(a.Id,
-            a.EmployeeId,
-            a.Employee?.User?.FullName ?? "",
+            a.UserId,
+            a.User?.FullName ?? "",
             a.ProjectId,
             a.Project?.Name ?? "",
             a.UtilisationPercent,

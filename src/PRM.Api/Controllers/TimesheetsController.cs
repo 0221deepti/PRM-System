@@ -7,9 +7,13 @@ using PRM.Application.Interfaces.Services;
 
 namespace PRM.Api.Controllers;
 
+/// <summary>
+/// Timesheet management - Employees submit timesheets, managers review team timesheets.
+/// </summary>
 [ApiController]
 [Route("api/timesheets")]
 [Authorize]
+[Produces("application/json")]
 public class TimesheetsController : ControllerBase
 {
     private readonly ITimesheetService _timesheetService;
@@ -21,6 +25,14 @@ public class TimesheetsController : ControllerBase
         _allocationService = allocationService;
     }
 
+    /// <summary>
+    /// Submit weekly timesheet with activity entries and tags (Employee only)
+    /// </summary>
+    /// <param name="dto">Timesheet data including entries with activity tags</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <response code="200">Timesheet submitted successfully</response>
+    /// <response code="400">Validation error - exceeds max hours or invalid entries</response>
+    /// <response code="401">Unauthorized</response>
     [HttpPost]
     [Authorize(Roles = "Employee")]
     public async Task<IActionResult> Submit([FromBody] SubmitTimesheetDto dto, CancellationToken ct)
@@ -30,6 +42,12 @@ public class TimesheetsController : ControllerBase
         return Ok(new { message = "Timesheet submitted successfully." });
     }
 
+    /// <summary>
+    /// Get employee's own timesheet history (Employee only)
+    /// </summary>
+    /// <param name="ct">Cancellation token</param>
+    /// <response code="200">List of employee's submitted timesheets</response>
+    /// <response code="401">Unauthorized</response>
     [HttpGet("mine")]
     [Authorize(Roles = "Employee")]
     public async Task<IActionResult> GetMine(CancellationToken ct)
@@ -39,6 +57,14 @@ public class TimesheetsController : ControllerBase
         return Ok(timesheets);
     }
 
+    /// <summary>
+    /// Get team's timesheets for a specific week (Manager only)
+    /// </summary>
+    /// <param name="week">Optional week start date in DD-MM-YYYY format. Defaults to current week.</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <response code="200">Team's timesheets for the week</response>
+    /// <response code="400">Invalid date format</response>
+    /// <response code="403">Forbidden - Manager only</response>
     [HttpGet("team")]
     [Authorize(Roles = "Manager")]
     public async Task<IActionResult> GetTeam([FromQuery] string? week, CancellationToken ct)
@@ -63,6 +89,12 @@ public class TimesheetsController : ControllerBase
         return Ok(timesheets);
     }
 
+    /// <summary>
+    /// Check if employee missed last week's timesheet submission (Employee only)
+    /// </summary>
+    /// <param name="ct">Cancellation token</param>
+    /// <response code="200">Missed check result</response>
+    /// <response code="401">Unauthorized</response>
     [HttpGet("missed-check")]
     [Authorize(Roles = "Employee")]
     public async Task<IActionResult> CheckMissed(CancellationToken ct)
@@ -72,6 +104,14 @@ public class TimesheetsController : ControllerBase
         return Ok(new { hasMissed });
     }
 
+    /// <summary>
+    /// Get employee's active allocations for a specific week (Employee only)
+    /// </summary>
+    /// <param name="week">Week start date in DD-MM-YYYY format</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <response code="200">Active allocations for the week</response>
+    /// <response code="400">Invalid date format</response>
+    /// <response code="401">Unauthorized</response>
     [HttpGet("week-allocations")]
     [Authorize(Roles = "Employee")]
     public async Task<IActionResult> GetWeekAllocations([FromQuery] string week, CancellationToken ct)

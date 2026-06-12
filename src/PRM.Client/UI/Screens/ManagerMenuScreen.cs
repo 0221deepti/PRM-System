@@ -22,20 +22,16 @@ public class ManagerMenuScreen : Screen
         switch (choice)
         {
             case "1":
-                ConsoleRenderer.RenderWarning("My Projects screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new MyProjectsScreen(_services).RenderAsync();
                 break;
             case "2":
-                ConsoleRenderer.RenderWarning("Allocate Resources screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new AllocateResourcesScreen(_services).RenderAsync();
                 break;
             case "3":
-                ConsoleRenderer.RenderWarning("Team Timesheets screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new TeamTimesheetsScreen(_services).RenderAsync();
                 break;
             case "4":
-                ConsoleRenderer.RenderWarning("AI Features screen not yet implemented.");
-                ConsoleRenderer.Pause();
+                await new AiFeaturesScreen(_services).RenderAsync();
                 break;
             case "0":
                 return false;

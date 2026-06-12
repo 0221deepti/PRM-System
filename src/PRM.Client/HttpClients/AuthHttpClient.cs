@@ -16,7 +16,7 @@ public class AuthHttpClient : ApiClient
         // Update session state
         _session.Token = result.Token;
         _session.UserFullName = result.FullName;
-        _session.Role = result.Role;
+        _session.RoleName = result.RoleName;
         _session.UserId = result.UserId;
         _session.EmployeeId = result.EmployeeId;
 

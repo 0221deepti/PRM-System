@@ -2,12 +2,13 @@ using PRM.Domain.Enums;
 
 namespace PRM.Domain.Entities;
 
-public class EmployeeSkill : BaseEntity
+public class UserSkill : BaseEntity
 {
-    public int EmployeeId { get; set; }
+    public int UserId { get; set; }
     public int SkillId { get; set; }
     public SkillProficiency Proficiency { get; set; }
 
-    public Employee Employee { get; set; } = null!;
+    // Navigation
+    public User User { get; set; } = null!;
     public Skill Skill { get; set; } = null!;
 }

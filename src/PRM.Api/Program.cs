@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using PRM.Api.Middleware;
 using PRM.Application.Interfaces.Repositories;
 using PRM.Application.Interfaces.Services;
@@ -16,6 +17,54 @@ using PRM.Infrastructure.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+
+// Swagger/OpenAPI
+builder.Services.AddSwaggerGen(opts =>
+{
+    opts.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "PRM System API",
+        Version = "v2.0",
+        Description = "Project Resource Management System - Complete API with RBAC, Allocations, Timesheets, and Project Management",
+        Contact = new OpenApiContact
+        {
+            Name = "Support Team",
+            Email = "support@prm.local"
+        },
+        License = new OpenApiLicense
+        {
+            Name = "Proprietary",
+            Url = new Uri("https://example.com/license")
+        }
+    });
+
+    opts.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Enter JWT token (without 'Bearer ' prefix)",
+        In = ParameterLocation.Header,
+        Name = "Authorization"
+    });
+
+    opts.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
+
+    // Include XML comments for API descriptions (optional - requires project XML doc generation)
+    var xmlFile = "PRM.Api.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+        opts.IncludeXmlComments(xmlPath);
+});
 
 // EF Core - SQLite
 builder.Services.AddDbContext<PrmDbContext>(opts =>
@@ -51,6 +100,9 @@ builder.Services.AddScoped<ITimesheetRepository, TimesheetRepository>();
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<ISystemConfigRepository, SystemConfigRepository>();
 
+// Generic repository for new entities
+builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+
 // Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
@@ -72,6 +124,25 @@ builder.Services.AddSingleton<IAiProviderFactory, AiProviderFactory>();
 builder.Services.AddHostedService<HealthFlaggingScheduler>();
 
 var app = builder.Build();
+
+// Swagger UI
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger(opts =>
+    {
+        opts.RouteTemplate = "api-docs/{documentName}/swagger.json";
+    });
+    app.UseSwaggerUI(opts =>
+    {
+        opts.SwaggerEndpoint("/api-docs/v1/swagger.json", "PRM System API v2.0");
+        opts.RoutePrefix = "swagger";
+        opts.DefaultModelsExpandDepth(2);
+        opts.DefaultModelExpandDepth(2);
+        opts.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
+        opts.EnableValidator();
+        opts.EnableTryItOutByDefault();
+    });
+}
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseAuthentication();

@@ -34,7 +34,7 @@ public class AuthService : IAuthService
 
         var token = _tokenService.GenerateToken(user, employeeId);
 
-        return new LoginResponseDto(token, user.ForcePasswordChange, user.Role, user.FullName, user.Id, employeeId);
+        return new LoginResponseDto(token, user.ForcePasswordChange, user.Role?.Name ?? "User", user.FullName, user.Id, employeeId);
     }
 
     public async Task ChangePasswordAsync(int userId, string newPassword, CancellationToken ct)

@@ -80,11 +80,11 @@ public class AiService : IAiService
         foreach (var alloc in activeAllocations)
         {
             var timesheets = await _timesheetRepo.GetByProjectAndWeekAsync(project.Id, lastWeek, ct);
-            var empTimesheets = timesheets.Where(t => t.EmployeeId == alloc.EmployeeId);
-            var actualHours = empTimesheets.Sum(t => t.HoursWorked);
+            var empTimesheets = timesheets.Where(t => t.UserId == alloc.UserId);
+            var actualHours = empTimesheets.Sum(t => t.TotalHoursWorked);
             var expectedHours = alloc.UtilisationPercent / 100m * 40;
             effortList.Add(new EffortContext(
-                alloc.Employee?.User?.FullName ?? "Unknown",
+                alloc.User?.FullName ?? "Unknown",
                 actualHours,
                 expectedHours));
         }
@@ -94,7 +94,7 @@ public class AiService : IAiService
             m.Status == MilestoneStatus.InProgress && m.DueDate < today)).ToList();
 
         var allocationContexts = activeAllocations.Select(a =>
-            new AllocationContext(a.Employee?.User?.FullName ?? "Unknown", a.UtilisationPercent)).ToList();
+            new AllocationContext(a.User?.FullName ?? "Unknown", a.UtilisationPercent)).ToList();
 
         var prompt = $"""
             Project: {project.Name}
@@ -120,9 +120,9 @@ public class AiService : IAiService
         return new RiskSummaryDto(summary, project.Name);
     }
 
-    private static bool HasEnoughCapacity(Domain.Entities.Employee employee, DateOnly from, DateOnly to, int minFreePercent)
+    private static bool HasEnoughCapacity(Domain.Entities.User user, DateOnly from, DateOnly to, int minFreePercent)
     {
-        var activeAllocations = employee.Allocations
+        var activeAllocations = user.Allocations
             .Where(a => a.IsActive && a.FromDate <= to && a.ToDate >= from)
             .ToList();
 
@@ -130,20 +130,20 @@ public class AiService : IAiService
         return (100 - totalUsed) >= minFreePercent;
     }
 
-    private static string BuildCandidateContext(List<Domain.Entities.Employee> employees)
+    private static string BuildCandidateContext(List<Domain.Entities.User> users)
     {
-        var lines = employees.Select(e =>
+        var lines = users.Select(u =>
         {
-            var skills = e.Skills.Select(s => $"{s.Skill?.Name} ({s.Proficiency})").ToList();
-            var allocs = e.Allocations.Where(a => a.IsActive)
+            var skills = u.Skills.Select(s => $"{s.Skill?.Name} ({s.Proficiency})").ToList();
+            var allocs = u.Allocations.Where(a => a.IsActive)
                 .Sum(a => a.UtilisationPercent);
-            return $"ID={e.Id}, Name={e.User?.FullName}, Department={e.Department}, " +
+            return $"ID={u.Id}, Name={u.FullName}, Department={u.Department}, " +
                    $"FreeCapacity={100 - allocs}%, Skills=[{string.Join(", ", skills)}]";
         });
         return string.Join("\n", lines);
     }
 
-    private static SkillMatchResultDto ParseSkillMatchResponse(string rawResponse, List<Domain.Entities.Employee> eligible)
+    private static SkillMatchResultDto ParseSkillMatchResponse(string rawResponse, List<Domain.Entities.User> eligible)
     {
         try
         {
@@ -166,7 +166,7 @@ public class AiService : IAiService
                 {
                     var freePercent = 100 - emp.Allocations.Where(a => a.IsActive).Sum(a => a.UtilisationPercent);
                     var skills = emp.Skills.Select(s => s.Skill?.Name ?? "").ToList();
-                    candidates.Add(new SkillMatchCandidateDto(empId, emp.User?.FullName ?? "", reason, freePercent, skills));
+                    candidates.Add(new SkillMatchCandidateDto(empId, emp.FullName ?? "", reason, freePercent, skills));
                 }
             }
 

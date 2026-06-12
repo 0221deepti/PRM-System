@@ -1,5 +1,3 @@
-using PRM.Domain.Enums;
-
 namespace PRM.Application.DTOs.Auth;
 
 public record LoginRequestDto(string Username, string Password);
@@ -7,7 +5,7 @@ public record LoginRequestDto(string Username, string Password);
 public record LoginResponseDto(
     string Token,
     bool ForcePasswordChange,
-    UserRole Role,
+    string RoleName,
     string FullName,
     int UserId,
     int EmployeeId);

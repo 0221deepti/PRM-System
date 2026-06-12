@@ -33,7 +33,7 @@ public class HealthFlaggingService : IHealthFlaggingService
 
         foreach (var employee in employees)
         {
-            var activeAllocations = await _allocations.GetActiveByEmployeeAsync(employee.Id, ct);
+            var activeAllocations = await _allocations.GetActiveByUserAsync(employee.Id, ct);
             var isAllocated = activeAllocations.Any(a => a.FromDate <= today && a.ToDate >= today);
             var newStatus = isAllocated ? EmployeeStatus.Allocated : EmployeeStatus.Bench;
 
@@ -105,8 +105,8 @@ public class HealthFlaggingService : IHealthFlaggingService
             {
                 var empTimesheets = await _timesheets.GetByProjectAndWeekAsync(project.Id, lastWeek, ct);
                 var empActual = empTimesheets
-                    .Where(t => t.EmployeeId == alloc.EmployeeId)
-                    .Sum(t => t.HoursWorked);
+                    .Where(t => t.UserId == alloc.UserId)
+                    .Sum(t => t.TotalHoursWorked);
 
                 // If any employee logged < 50% expected, mark AT RISK
                 var empExpected = alloc.UtilisationPercent / 100m * maxWeeklyHours;
