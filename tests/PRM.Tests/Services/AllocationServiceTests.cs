@@ -12,19 +12,19 @@ namespace PRM.Tests.Services;
 public class AllocationServiceTests
 {
     private readonly Mock<IAllocationRepository> _allocationRepoMock;
-    private readonly Mock<IEmployeeRepository> _employeeRepoMock;
+    private readonly Mock<IUserRepository> _userRepoMock;
     private readonly Mock<IProjectRepository> _projectRepoMock;
     private readonly AllocationService _service;
 
     public AllocationServiceTests()
     {
         _allocationRepoMock = new Mock<IAllocationRepository>();
-        _employeeRepoMock = new Mock<IEmployeeRepository>();
+        _userRepoMock = new Mock<IUserRepository>();
         _projectRepoMock = new Mock<IProjectRepository>();
 
         _service = new AllocationService(
             _allocationRepoMock.Object,
-            _employeeRepoMock.Object,
+            _userRepoMock.Object,
             _projectRepoMock.Object);
     }
 
@@ -32,11 +32,11 @@ public class AllocationServiceTests
     public async Task AllocateAsync_TotalExceeds100Percent_ThrowsOverAllocationException()
     {
         // Arrange
-        var employee = new Employee { Id = 1, Status = EmployeeStatus.Bench };
+        var user = new User { Id = 1, Status = EmployeeStatus.Bench };
         var project = new Project { Id = 10, Status = ProjectStatus.Active };
         var dto = new CreateAllocationDto(1, 10, 60, new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31));
 
-        _employeeRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(employee);
+        _userRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         _projectRepoMock.Setup(r => r.GetByIdAsync(10, It.IsAny<CancellationToken>())).ReturnsAsync(project);
 
         _allocationRepoMock.Setup(r => r.GetTotalUtilisationAsync(1, dto.FromDate, dto.ToDate, null, It.IsAny<CancellationToken>()))
@@ -54,13 +54,13 @@ public class AllocationServiceTests
     public async Task AllocateAsync_ValidRequest_CreatesAllocation()
     {
         // Arrange
-        var employee = new Employee { Id = 1, Status = EmployeeStatus.Bench };
+        var user = new User { Id = 1, Status = EmployeeStatus.Bench };
         var project = new Project { Id = 10, Status = ProjectStatus.Active };
         var dto = new CreateAllocationDto(1, 10, 50, new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31));
 
-        _employeeRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(employee);
+        _userRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         _projectRepoMock.Setup(r => r.GetByIdAsync(10, It.IsAny<CancellationToken>())).ReturnsAsync(project);
-        _allocationRepoMock.Setup(r => r.GetActiveByEmployeeAsync(1, It.IsAny<CancellationToken>()))
+        _allocationRepoMock.Setup(r => r.GetActiveByUserAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Allocation>());
 
         // Act

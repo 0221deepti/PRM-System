@@ -34,8 +34,8 @@ public class AuthServiceTests
         // Arrange
         var password = "Password123!";
         var hashedPassword = BCrypt.Net.BCrypt.HashPassword(password);
-        var user = new User { Id = 1, Username = "testuser", PasswordHash = hashedPassword, Role = UserRole.Employee, IsActive = true };
-        var employee = new Employee { Id = 101, UserId = 1 };
+        var user = new User { Id = 1, Username = "testuser", PasswordHash = hashedPassword, IsActive = true };
+        var employee = new User { Id = 101 };
 
         _userRepoMock.Setup(repo => repo.GetByUsernameAsync("testuser", It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);

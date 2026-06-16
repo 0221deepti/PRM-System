@@ -13,7 +13,10 @@ public class TimesheetServiceTests
     private readonly Mock<ITimesheetRepository> _timesheetRepoMock;
     private readonly Mock<IAllocationRepository> _allocationRepoMock;
     private readonly Mock<ISystemConfigRepository> _configRepoMock;
-    private readonly Mock<IEmployeeRepository> _employeeRepoMock;
+    private readonly Mock<IUserRepository> _userRepoMock;
+    private readonly Mock<IRepository<ActivityTag>> _tagRepoMock;
+    private readonly Mock<IRepository<TimesheetEntry>> _entryRepoMock;
+    private readonly Mock<IRepository<TimesheetEntryTag>> _entryTagRepoMock;
     private readonly TimesheetService _service;
 
     public TimesheetServiceTests()
@@ -21,13 +24,19 @@ public class TimesheetServiceTests
         _timesheetRepoMock = new Mock<ITimesheetRepository>();
         _allocationRepoMock = new Mock<IAllocationRepository>();
         _configRepoMock = new Mock<ISystemConfigRepository>();
-        _employeeRepoMock = new Mock<IEmployeeRepository>();
+        _userRepoMock = new Mock<IUserRepository>();
+        _tagRepoMock = new Mock<IRepository<ActivityTag>>();
+        _entryRepoMock = new Mock<IRepository<TimesheetEntry>>();
+        _entryTagRepoMock = new Mock<IRepository<TimesheetEntryTag>>();
 
         _service = new TimesheetService(
             _timesheetRepoMock.Object,
             _allocationRepoMock.Object,
             _configRepoMock.Object,
-            _employeeRepoMock.Object);
+            _userRepoMock.Object,
+            _tagRepoMock.Object,
+            _entryRepoMock.Object,
+            _entryTagRepoMock.Object);
     }
 
     [Fact]
@@ -85,7 +94,7 @@ public class TimesheetServiceTests
         {
             new() { ProjectId = 10, UtilisationPercent = 50, FromDate = today.AddDays(-1), ToDate = today.AddDays(10) }
         };
-        _allocationRepoMock.Setup(a => a.GetActiveByEmployeeAsync(1, It.IsAny<CancellationToken>()))
+        _allocationRepoMock.Setup(a => a.GetActiveByUserAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(allocations);
 
         // Act

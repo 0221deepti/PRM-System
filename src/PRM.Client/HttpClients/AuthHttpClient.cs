@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using PRM.Application.DTOs.Auth;
 using PRM.Client.Session;
+using PRM.Domain.Enums;
 
 namespace PRM.Client.HttpClients;
 
@@ -16,7 +17,7 @@ public class AuthHttpClient : ApiClient
         // Update session state
         _session.Token = result.Token;
         _session.UserFullName = result.FullName;
-        _session.RoleName = result.RoleName;
+        _session.Role = Enum.Parse<UserRole>(result.RoleName);
         _session.UserId = result.UserId;
         _session.EmployeeId = result.EmployeeId;
 

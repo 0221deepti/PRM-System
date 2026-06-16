@@ -20,7 +20,7 @@ public class TokenService : ITokenService
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
-            new(ClaimTypes.Role, user.Role.ToString()),
+            new(ClaimTypes.Role, user.Role?.Name ?? ""),
             new("employeeId", employeeId.ToString()),
             new("fullName", user.FullName)
         };

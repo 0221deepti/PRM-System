@@ -28,32 +28,31 @@ public class EmployeeServiceTests
     public async Task DeactivateEmployeeAsync_ValidEmployee_DeactivatesUserAndEndsAllocations()
     {
         // Arrange
-        var user = new User { Id = 1, IsActive = true };
         var allocation = new Allocation { Id = 10, IsActive = true, ToDate = new DateOnly(2026, 12, 31) };
-        var employee = new Employee 
+        var employee = new User 
         { 
             Id = 5, 
-            UserId = 1, 
+            IsActive = true,
             Status = EmployeeStatus.Allocated,
             Allocations = new List<Allocation> { allocation }
         };
 
         _employeeRepoMock.Setup(e => e.GetWithAllocationsAsync(5, It.IsAny<CancellationToken>()))
             .ReturnsAsync(employee);
-        _userRepoMock.Setup(u => u.GetByIdAsync(1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
+        _userRepoMock.Setup(u => u.GetByIdAsync(5, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(employee);
 
         // Act
         await _service.DeactivateEmployeeAsync(5, CancellationToken.None);
 
         // Assert
         employee.Status.Should().Be(EmployeeStatus.Bench);
-        user.IsActive.Should().BeFalse();
+        employee.IsActive.Should().BeFalse();
         allocation.IsActive.Should().BeFalse();
         allocation.ToDate.Should().Be(DateOnly.FromDateTime(DateTime.UtcNow));
 
         _userRepoMock.Verify(u => u.Update(It.IsAny<User>()), Times.Once);
-        _employeeRepoMock.Verify(e => e.Update(It.IsAny<Employee>()), Times.Once);
+        _employeeRepoMock.Verify(e => e.Update(It.IsAny<User>()), Times.Once);
         _allocationsVerify(allocation);
         _employeeRepoMock.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -68,7 +67,7 @@ public class EmployeeServiceTests
     {
         // Arrange
         _employeeRepoMock.Setup(e => e.GetWithAllocationsAsync(99, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Employee?)null);
+            .ReturnsAsync((User?)null);
 
         // Act
         Func<Task> action = async () => await _service.DeactivateEmployeeAsync(99, CancellationToken.None);
