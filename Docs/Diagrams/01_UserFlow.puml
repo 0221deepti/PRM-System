@@ -1,0 +1,92 @@
+@startuml User_Flow_Diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam ActivityStartEndColor #FF6B6B
+skinparam ActivityBackgroundColor #4ECDC4
+skinparam ActivityBorderColor #333333
+skinparam ActivityFontColor #FFFFFF
+skinparam ArrowColor #333333
+skinparam NoteBkgColor #FFF9E6
+skinparam NoteBorderColor #FFA500
+
+title PRM System - User Flow Diagram
+
+start
+:User Launches Application;
+:Console UI Initializes;
+:Check Session Status;
+
+if (Is User Logged In?) then (No)
+    :Display Login Screen;
+    :Enter Username & Password;
+    :System Validates Credentials;
+    if (Valid?) then (Yes)
+        if (Force Password Change?) then (Yes)
+            :Prompt Password Change;
+            :Validate Password Strength;
+            :Update Password Hash;
+            :Set ForcePasswordChange = False;
+        else (No)
+            :Proceed;
+        endif
+        :Generate JWT Token;
+        :Store in SessionContext;
+        :Save User Role & Info;
+    else (No)
+        :Display Error: Invalid Credentials;
+        :Return to Login Screen;
+    endif
+else (Yes)
+    :Display Main Menu;
+endif
+
+:Display Role-Based Dashboard;
+
+if (User Role?) then (Admin)
+    :Show Admin Menu;
+    :Options: Users, Employees, Projects, Allocations, Config;
+    :Admin performs CRUD operations;
+    :Manage all system resources;
+else if (Manager)
+    :Show Manager Menu;
+    :Options: My Projects, Team Allocations, Timesheets;
+    :Manage team resources;
+    :View project details & milestones;
+else if (Employee)
+    :Show Employee Menu;
+    :Options: My Allocations, Submit Timesheet, View Skills;
+    :Submit work hours;
+    :View personal allocations;
+endif
+
+:User selects Action;
+:Process Request through HTTP Client;
+:Call Appropriate API Endpoint;
+:Display Result or Form;
+
+repeat
+    :User continues with more actions;
+    if (More Operations?) then (Yes)
+        :Process Next Request;
+    else (No)
+        :User selects Change Password or Logout;
+    endif
+until (User Exit?)
+
+if (Action?) then (Change Password)
+    :Enter Old Password;
+    :Enter New Password;
+    :Confirm New Password;
+    :Validate Strength (8+ chars, uppercase, digit);
+    :Update Password Hash;
+    :Return to Menu;
+else if (Logout)
+    :Clear SessionContext;
+    :Return to Login Screen;
+else if (Exit)
+    :Close Application;
+endif
+
+stop
+
+@enduml
