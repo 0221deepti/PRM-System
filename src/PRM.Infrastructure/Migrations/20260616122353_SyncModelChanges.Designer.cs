@@ -11,8 +11,8 @@ using PRM.Infrastructure.Persistence;
 namespace PRM.Infrastructure.Migrations
 {
     [DbContext(typeof(PrmDbContext))]
-    [Migration("20260612092713_ConsolidateEmployeeToUser")]
-    partial class ConsolidateEmployeeToUser
+    [Migration("20260616122353_SyncModelChanges")]
+    partial class SyncModelChanges
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -298,6 +298,14 @@ namespace PRM.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("LlmApiKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LlmApiUrl")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LlmModelName")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

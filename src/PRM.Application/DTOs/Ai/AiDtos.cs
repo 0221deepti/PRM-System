@@ -31,3 +31,23 @@ public record ProjectRiskContextDto(
 public record MilestoneContext(string Title, string Status, DateOnly DueDate, bool IsOverdue);
 public record AllocationContext(string EmployeeName, int Percent);
 public record EffortContext(string EmployeeName, decimal ActualHours, decimal ExpectedHours);
+
+public record TeamBuilderRequestDto(
+    int ManagerEmployeeId,
+    string NaturalLanguageRequirement);
+
+public record TeamBuilderCandidateDto(
+    int EmployeeId,
+    string EmployeeName,
+    string Department,
+    string Skills,
+    int CurrentUtilisation,
+    string CurrentStatus,
+    int MatchScore,
+    string RecommendationReason);
+
+public record TeamBuilderResultDto(
+    List<TeamBuilderCandidateDto> Recommendations,
+    string AdditionalInsights,
+    string? FutureExtensibilityNotes = null);
+

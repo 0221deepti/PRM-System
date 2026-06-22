@@ -48,4 +48,19 @@ public class AiController : ControllerBase
         var result = await _aiService.GenerateRiskSummaryAsync(dto, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Recommend team members based on a natural language project requirement (Manager only)
+    /// </summary>
+    /// <param name="dto">Natural language requirement and manager ID</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <response code="200">Recommendation results containing ranked team members and insights</response>
+    /// <response code="400">Invalid request</response>
+    /// <response code="403">Forbidden - Manager only</response>
+    [HttpPost("team-builder")]
+    public async Task<IActionResult> BuildTeam([FromBody] TeamBuilderRequestDto dto, CancellationToken ct)
+    {
+        var result = await _aiService.BuildTeamAsync(dto, ct);
+        return Ok(result);
+    }
 }

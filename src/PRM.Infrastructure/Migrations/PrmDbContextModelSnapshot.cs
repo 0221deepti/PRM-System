@@ -298,6 +298,14 @@ namespace PRM.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("LlmApiUrl")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LlmModelName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("LlmProvider")
                         .IsRequired()
                         .HasColumnType("TEXT");

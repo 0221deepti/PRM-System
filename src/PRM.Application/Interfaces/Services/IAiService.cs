@@ -6,6 +6,7 @@ public interface IAiService
 {
     Task<SkillMatchResultDto> MatchSkillsAsync(SkillMatchRequestDto request, CancellationToken ct);
     Task<RiskSummaryDto> GenerateRiskSummaryAsync(RiskSummaryRequestDto request, CancellationToken ct);
+    Task<TeamBuilderResultDto> BuildTeamAsync(TeamBuilderRequestDto request, CancellationToken ct);
 }
 
 public interface IHealthFlaggingService

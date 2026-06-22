@@ -17,7 +17,13 @@ public class SystemConfigService : ISystemConfigService
             ? "(not set)"
             : new string('*', Math.Min(config.LlmApiKey.Length, 28));
 
-        return new SystemConfigDto(config.LlmProvider, masked, config.SchedulerIntervalHours, config.MaxWeeklyHours);
+        return new SystemConfigDto(
+            config.LlmProvider, 
+            masked, 
+            config.LlmApiUrl,
+            config.LlmModelName,
+            config.SchedulerIntervalHours, 
+            config.MaxWeeklyHours);
     }
 
     public async Task UpdateConfigAsync(UpdateConfigDto dto, CancellationToken ct)
@@ -26,6 +32,8 @@ public class SystemConfigService : ISystemConfigService
 
         if (dto.LlmProvider != null) config.LlmProvider = dto.LlmProvider;
         if (dto.LlmApiKey != null) config.LlmApiKey = dto.LlmApiKey;
+        if (dto.LlmApiUrl != null) config.LlmApiUrl = dto.LlmApiUrl;
+        if (dto.LlmModelName != null) config.LlmModelName = dto.LlmModelName;
         if (dto.SchedulerIntervalHours.HasValue) config.SchedulerIntervalHours = dto.SchedulerIntervalHours.Value;
         if (dto.MaxWeeklyHours.HasValue) config.MaxWeeklyHours = dto.MaxWeeklyHours.Value;
 

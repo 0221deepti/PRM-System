@@ -1,15 +1,15 @@
+using PRM.Domain.Entities;
 using PRM.Domain.Exceptions;
 
 namespace PRM.Infrastructure.AI;
 
 /// <summary>
 /// Factory that creates the appropriate LLM provider based on the configured provider name.
-/// Implements the Factory Pattern — all provider creation logic is centralized here.
-/// Adding a new provider requires only adding a new case here (Open/Closed Principle).
+/// Currently supports LocalGemma for self-hosted Gemma models via Ollama-style API.
 /// </summary>
 public interface IAiProviderFactory
 {
-    ILlmProvider Create(string providerName, string apiKey);
+    ILlmProvider Create(SystemConfig config);
 }
 
 public class AiProviderFactory : IAiProviderFactory
@@ -18,10 +18,13 @@ public class AiProviderFactory : IAiProviderFactory
 
     public AiProviderFactory(IHttpClientFactory httpFactory) => _httpFactory = httpFactory;
 
-    public ILlmProvider Create(string providerName, string apiKey) => providerName switch
+    public ILlmProvider Create(SystemConfig config) => config.LlmProvider switch
     {
-        "Gemini" => new GeminiProvider(_httpFactory.CreateClient(), apiKey),
-        "Groq" => new GroqProvider(_httpFactory.CreateClient(), apiKey),
-        _ => throw new DomainException($"Unknown LLM provider: {providerName}")
+        "LocalGemma" => new LocalGemmaProvider(
+            _httpFactory.CreateClient(), 
+            config.LlmApiKey, 
+            config.LlmApiUrl, 
+            config.LlmModelName),
+        _ => throw new DomainException($"Unknown LLM provider: {config.LlmProvider}")
     };
 }

@@ -19,4 +19,10 @@ public class AiHttpClient : ApiClient
         var response = await _http.PostAsJsonAsync("api/ai/risk-summary", dto);
         return await ReadAsync<RiskSummaryDto>(response);
     }
+
+    public async Task<TeamBuilderResultDto> BuildTeamAsync(TeamBuilderRequestDto dto)
+    {
+        var response = await _http.PostAsJsonAsync("api/ai/team-builder", dto);
+        return await ReadAsync<TeamBuilderResultDto>(response);
+    }
 }
