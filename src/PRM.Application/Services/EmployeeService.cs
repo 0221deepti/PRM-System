@@ -13,11 +13,14 @@ public class EmployeeService : IEmployeeService
     private readonly IUserRepository _users;
     private readonly IAllocationRepository _allocations;
 
-    public EmployeeService(IEmployeeRepository employees, IUserRepository users, IAllocationRepository allocations)
+    private readonly IEmailService _emailService;
+
+    public EmployeeService(IEmployeeRepository employees, IUserRepository users, IAllocationRepository allocations, IEmailService emailService)
     {
         _employees = employees;
         _users = users;
         _allocations = allocations;
+        _emailService = emailService;
     }
 
     public async Task<IEnumerable<EmployeeSummaryDto>> GetAllEmployeesAsync(CancellationToken ct)
@@ -32,10 +35,16 @@ public class EmployeeService : IEmployeeService
         return employees.Select(MapToSummary);
     }
 
-    public async Task<EmployeeDetailDto?> GetEmployeeDetailAsync(int employeeId, CancellationToken ct)
+    public async Task<EmployeeDetailDto?> GetEmployeeDetailAsync(int employeeId, int callerUserId, string callerRole, CancellationToken ct)
     {
         var employee = await _employees.GetWithAllocationsAsync(employeeId, ct);
         if (employee == null) return null;
+
+        if (callerRole == "Manager" && employee.ManagerId != callerUserId)
+            throw new DomainException("This employee is not assigned to your team.");
+
+        if (callerRole == "Employee" && employee.Id != callerUserId)
+            throw new PrmUnauthorizedException("You can only view your own profile.");
 
         return await BuildDetailDto(employee, ct);
     }
@@ -88,7 +97,7 @@ public class EmployeeService : IEmployeeService
         await _employees.SaveChangesAsync(ct);
     }
 
-    public async Task AssignManagerAsync(int employeeUserId, int managerUserId, CancellationToken ct)
+    public async Task<string?> AssignManagerAsync(int employeeUserId, int managerUserId, CancellationToken ct)
     {
         var employee = await _employees.GetByUserIdAsync(employeeUserId, ct)
                        ?? throw new EntityNotFoundException("Employee not found.");
@@ -96,9 +105,36 @@ public class EmployeeService : IEmployeeService
         var manager = await _employees.GetByUserIdAsync(managerUserId, ct)
                       ?? throw new EntityNotFoundException("Manager employee not found.");
 
+        if (manager.Role?.Name != "Manager" && manager.RoleId != 2)
+            throw new DomainException("The selected manager must have the Manager role.");
+
+        if (employee.Id == manager.Id)
+            throw new DomainException("An employee cannot report to themselves.");
+
         employee.ManagerId = manager.Id;
         _employees.Update(employee);
         await _employees.SaveChangesAsync(ct);
+
+        string? warningMessage = null;
+        try
+        {
+            var placeholders = new Dictionary<string, string>
+            {
+                ["EmployeeName"] = employee.FullName,
+                ["ManagerName"] = manager.FullName,
+                ["ManagerEmail"] = manager.Email
+            };
+            var emailResult = await _emailService.SendTemplateEmailAsync("Manager Assignment Notification", employee.Email, placeholders, ct);
+            if (!emailResult.IsSuccess)
+            {
+                warningMessage = "Unable to send notification email. The requested operation completed successfully, but email delivery failed.";
+            }
+        }
+        catch (Exception)
+        {
+            warningMessage = "Unable to send notification email. The requested operation completed successfully, but email delivery failed.";
+        }
+        return warningMessage;
     }
 
     private async Task<EmployeeDetailDto> BuildDetailDto(User employee, CancellationToken ct)
@@ -136,24 +172,54 @@ public class EmployeeService : IEmployeeService
 public class SkillService : ISkillService
 {
     private readonly IEmployeeRepository _employees;
+    private readonly IRepository<Skill> _skills;
+    private readonly IRepository<UserSkill> _userSkills;
 
-    public SkillService(IEmployeeRepository employees) => _employees = employees;
+    public SkillService(
+        IEmployeeRepository employees,
+        IRepository<Skill> skills,
+        IRepository<UserSkill> userSkills)
+    {
+        _employees = employees;
+        _skills = skills;
+        _userSkills = userSkills;
+    }
 
     public async Task AddSkillAsync(int employeeId, AddSkillDto dto, CancellationToken ct)
     {
         var employee = await _employees.GetWithSkillsAsync(employeeId, ct)
                        ?? throw new EntityNotFoundException("Employee not found.");
 
-        // Find or create skill — for simplicity, check existing skills by name
-        var existingSkill = employee.Skills.FirstOrDefault(
-            s => s.Skill != null && s.Skill.Name.Equals(dto.SkillName, StringComparison.OrdinalIgnoreCase));
+        var trimmedName = dto.SkillName.Trim();
 
+        // Find or create the skill in global database
+        var allSkills = await _skills.GetAllAsync(ct);
+        var globalSkill = allSkills.FirstOrDefault(s => s.Name.Trim().Equals(trimmedName, StringComparison.OrdinalIgnoreCase));
+        if (globalSkill == null)
+        {
+            globalSkill = new Skill
+            {
+                Name = trimmedName,
+                Category = dto.Category
+            };
+            await _skills.AddAsync(globalSkill, ct);
+            await _skills.SaveChangesAsync(ct);
+        }
+
+        // Check if the user is already assigned this skill
+        var existingSkill = employee.Skills.FirstOrDefault(s => s.SkillId == globalSkill.Id);
         if (existingSkill != null)
-            throw new DomainException($"Skill '{dto.SkillName}' already assigned to this employee.");
+            throw new DomainException($"Skill '{trimmedName}' already assigned to this employee.");
 
-        // Note: In production, use a SkillRepository. For simplicity, handled via context.
-        _employees.Update(employee);
-        await _employees.SaveChangesAsync(ct);
+        var userSkill = new UserSkill
+        {
+            UserId = employeeId,
+            SkillId = globalSkill.Id,
+            Proficiency = dto.Proficiency
+        };
+
+        await _userSkills.AddAsync(userSkill, ct);
+        await _userSkills.SaveChangesAsync(ct);
     }
 
     public async Task UpdateSkillProficiencyAsync(int employeeId, int skillId, UpdateSkillDto dto, CancellationToken ct)

@@ -16,7 +16,7 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         _set = db.Set<T>();
     }
 
-    public async Task<T?> GetByIdAsync(int id, CancellationToken ct = default)
+    public virtual async Task<T?> GetByIdAsync(int id, CancellationToken ct = default)
         => await _set.FindAsync(new object[] { id }, ct);
 
     public async Task<IEnumerable<T>> GetAllAsync(CancellationToken ct = default)

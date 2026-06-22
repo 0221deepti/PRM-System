@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using PRM.Domain.Exceptions;
 
 namespace PRM.Infrastructure.AI;
 
@@ -24,8 +25,11 @@ public class LocalGemmaProvider : ILlmProvider
 
     public async Task<string> CompleteAsync(string systemPrompt, string userPrompt, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(_apiKey))
-            return "[AI not configured — set your Local Gemma API key in System Configuration.]";
+        if (string.IsNullOrWhiteSpace(_apiKey))
+            throw new DomainException("AI provider API key is not configured. Please set your Local Gemma API key in System Configuration.");
+
+        if (string.IsNullOrWhiteSpace(_baseUrl))
+            throw new DomainException("AI provider API URL is not configured. Please set the endpoint URL in System Configuration.");
 
         // Combine system and user prompts into a single prompt for Ollama format
         var combinedPrompt = $"{systemPrompt}\n\n{userPrompt}";
@@ -48,24 +52,17 @@ public class LocalGemmaProvider : ILlmProvider
         request.Headers.Add("apikey", _apiKey);
         request.Content = JsonContent.Create(payload);
 
-        try
-        {
-            var response = await _http.SendAsync(request, ct);
-            var content = await response.Content.ReadAsStringAsync(ct);
+        var response = await _http.SendAsync(request, ct);
+        var content = await response.Content.ReadAsStringAsync(ct);
 
-            if (!response.IsSuccessStatusCode)
-                return $"[AI request failed: {response.StatusCode} - {content}]";
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"AI request failed with status code {response.StatusCode} and response: {content}");
 
-            using var doc = JsonDocument.Parse(content);
-            
-            // Ollama format returns response in "response" field
-            var text = doc.RootElement.GetProperty("response").GetString();
+        using var doc = JsonDocument.Parse(content);
+        
+        // Ollama format returns response in "response" field
+        var text = doc.RootElement.GetProperty("response").GetString();
 
-            return text ?? "[No response from AI]";
-        }
-        catch (Exception ex)
-        {
-            return $"[AI request error: {ex.Message}]";
-        }
+        return text ?? throw new DomainException("The AI provider returned an empty response.");
     }
 }

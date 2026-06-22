@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PRM.Application.DTOs.Ai;
+using PRM.Application.DTOs.Common;
 using PRM.Application.Interfaces.Services;
 
 namespace PRM.Api.Controllers;
@@ -31,7 +32,7 @@ public class AiController : ControllerBase
     public async Task<IActionResult> SkillMatch([FromBody] SkillMatchRequestDto dto, CancellationToken ct)
     {
         var result = await _aiService.MatchSkillsAsync(dto, ct);
-        return Ok(result);
+        return Ok(new ApiResponse<SkillMatchResultDto>(true, "Skill match analysis completed successfully.", result));
     }
 
     /// <summary>
@@ -46,7 +47,7 @@ public class AiController : ControllerBase
     public async Task<IActionResult> RiskSummary([FromBody] RiskSummaryRequestDto dto, CancellationToken ct)
     {
         var result = await _aiService.GenerateRiskSummaryAsync(dto, ct);
-        return Ok(result);
+        return Ok(new ApiResponse<RiskSummaryDto>(true, "Risk summary generated successfully.", result));
     }
 
     /// <summary>
@@ -61,6 +62,6 @@ public class AiController : ControllerBase
     public async Task<IActionResult> BuildTeam([FromBody] TeamBuilderRequestDto dto, CancellationToken ct)
     {
         var result = await _aiService.BuildTeamAsync(dto, ct);
-        return Ok(result);
+        return Ok(new ApiResponse<TeamBuilderResultDto>(true, "Team build recommendations generated successfully.", result));
     }
 }

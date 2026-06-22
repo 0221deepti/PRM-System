@@ -15,6 +15,8 @@ public class TimesheetService : ITimesheetService
     private readonly IRepository<ActivityTag> _tags;
     private readonly IRepository<TimesheetEntry> _entries;
     private readonly IRepository<TimesheetEntryTag> _entryTags;
+    private readonly ITimesheetAccessService _timesheetAccess;
+    private readonly IProjectRepository _projects;
 
     public TimesheetService(
         ITimesheetRepository timesheets,
@@ -23,7 +25,9 @@ public class TimesheetService : ITimesheetService
         IUserRepository users,
         IRepository<ActivityTag> tags,
         IRepository<TimesheetEntry> entries,
-        IRepository<TimesheetEntryTag> entryTags)
+        IRepository<TimesheetEntryTag> entryTags,
+        ITimesheetAccessService timesheetAccess,
+        IProjectRepository projects)
     {
         _timesheets = timesheets;
         _allocations = allocations;
@@ -32,10 +36,18 @@ public class TimesheetService : ITimesheetService
         _tags = tags;
         _entries = entries;
         _entryTags = entryTags;
+        _timesheetAccess = timesheetAccess;
+        _projects = projects;
     }
 
     public async Task SubmitAsync(SubmitTimesheetDto dto, int userId, CancellationToken ct)
     {
+        await _timesheetAccess.EnsureTimesheetAccessAsync(userId, ct);
+
+        // Verify project exists
+        var project = await _projects.GetByIdAsync(dto.ProjectId, ct)
+                      ?? throw new EntityNotFoundException("Project not found.");
+
         var config = await _config.GetAsync(ct);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -90,6 +102,9 @@ public class TimesheetService : ITimesheetService
     public async Task<IEnumerable<TeamTimesheetEntryDto>> GetTeamTimesheetsAsync(int managerId, DateOnly weekStart, CancellationToken ct)
     {
         var timesheets = await _timesheets.GetByWeekAsync(weekStart, managerId, ct);
+        if (!timesheets.Any())
+            throw new DomainException("No submitted timesheets found for your team.");
+
         return timesheets.Select(t => new TeamTimesheetEntryDto(
             t.User?.FullName ?? "",
             t.UserId,

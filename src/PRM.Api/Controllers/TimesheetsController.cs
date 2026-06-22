@@ -1,14 +1,15 @@
-using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PRM.Application.DTOs.Common;
+using PRM.Application.DTOs.Notification;
 using PRM.Application.DTOs.Timesheet;
 using PRM.Application.Interfaces.Services;
 
 namespace PRM.Api.Controllers;
 
 /// <summary>
-/// Timesheet management - Employees submit timesheets, managers review team timesheets.
+/// Timesheet management - Submit and view timesheets, manage access.
 /// </summary>
 [ApiController]
 [Route("api/timesheets")]
@@ -17,111 +18,116 @@ namespace PRM.Api.Controllers;
 public class TimesheetsController : ControllerBase
 {
     private readonly ITimesheetService _timesheetService;
-    private readonly IAllocationService _allocationService;
+    private readonly ITimesheetAccessService _accessService;
 
-    public TimesheetsController(ITimesheetService timesheetService, IAllocationService allocationService)
+    public TimesheetsController(ITimesheetService timesheetService, ITimesheetAccessService accessService)
     {
         _timesheetService = timesheetService;
-        _allocationService = allocationService;
+        _accessService = accessService;
     }
 
     /// <summary>
-    /// Submit weekly timesheet with activity entries and tags (Employee only)
+    /// Submit a timesheet (Employee only)
     /// </summary>
-    /// <param name="dto">Timesheet data including entries with activity tags</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <response code="200">Timesheet submitted successfully</response>
-    /// <response code="400">Validation error - exceeds max hours or invalid entries</response>
-    /// <response code="401">Unauthorized</response>
     [HttpPost]
     [Authorize(Roles = "Employee")]
     public async Task<IActionResult> Submit([FromBody] SubmitTimesheetDto dto, CancellationToken ct)
     {
-        var empId = GetCallerEmployeeId();
-        await _timesheetService.SubmitAsync(dto, empId, ct);
-        return Ok(new { message = "Timesheet submitted successfully." });
+        var employeeId = GetCallerEmployeeId();
+        await _timesheetService.SubmitAsync(dto, employeeId, ct);
+        return Ok(new ApiResponse(true, "Timesheet submitted successfully."));
     }
 
     /// <summary>
-    /// Get employee's own timesheet history (Employee only)
+    /// Get authenticated employee's own timesheets
     /// </summary>
-    /// <param name="ct">Cancellation token</param>
-    /// <response code="200">List of employee's submitted timesheets</response>
-    /// <response code="401">Unauthorized</response>
     [HttpGet("mine")]
     [Authorize(Roles = "Employee")]
     public async Task<IActionResult> GetMine(CancellationToken ct)
     {
-        var empId = GetCallerEmployeeId();
-        var timesheets = await _timesheetService.GetMyTimesheetsAsync(empId, ct);
-        return Ok(timesheets);
+        var employeeId = GetCallerEmployeeId();
+        var timesheets = await _timesheetService.GetMyTimesheetsAsync(employeeId, ct);
+        return Ok(new ApiResponse<IEnumerable<TimesheetSummaryDto>>(true, "My timesheets retrieved successfully.", timesheets));
     }
 
     /// <summary>
-    /// Get team's timesheets for a specific week (Manager only)
+    /// Get team timesheets for manager (Manager/Admin only)
     /// </summary>
-    /// <param name="week">Optional week start date in DD-MM-YYYY format. Defaults to current week.</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <response code="200">Team's timesheets for the week</response>
-    /// <response code="400">Invalid date format</response>
-    /// <response code="403">Forbidden - Manager only</response>
     [HttpGet("team")]
+    [Authorize(Roles = "Manager,Admin")]
+    public async Task<IActionResult> GetTeam([FromQuery] DateOnly? weekStart, CancellationToken ct)
+    {
+        if (!weekStart.HasValue)
+            return BadRequest(new ApiResponse(false, "Week Start Date is invalid or missing."));
+
+        var managerId = GetCallerEmployeeId();
+        var timesheets = await _timesheetService.GetTeamTimesheetsAsync(managerId, weekStart.Value, ct);
+        return Ok(new ApiResponse<IEnumerable<TeamTimesheetEntryDto>>(true, "Team timesheets retrieved successfully.", timesheets));
+    }
+
+    /// <summary>
+    /// Check if authenticated employee missed last week's timesheet submission
+    /// </summary>
+    [HttpGet("missed-last-week")]
+    [Authorize(Roles = "Employee")]
+    public async Task<IActionResult> GetMissedLastWeek(CancellationToken ct)
+    {
+        var employeeId = GetCallerEmployeeId();
+        var result = await _timesheetService.HasMissedLastWeekAsync(employeeId, ct);
+        return Ok(new ApiResponse<object>(true, "Missed last week check completed.", new { missedLastWeek = result }));
+    }
+
+    /// <summary>
+    /// Get timesheet access status for employee
+    /// </summary>
+    [HttpGet("access-status/{employeeId:int}")]
+    public async Task<IActionResult> GetAccessStatus(int employeeId, CancellationToken ct)
+    {
+        var callerId = GetCallerEmployeeId();
+        var callerRole = User.FindFirstValue(ClaimTypes.Role) ?? "";
+
+        var status = await _accessService.GetCurrentStatusAsync(employeeId, callerId, callerRole, ct);
+        if (status == null)
+            return NotFound(new ApiResponse(false, "Access status not found for this employee."));
+
+        return Ok(new ApiResponse<TimesheetAccessStatusDto>(true, "Access status retrieved successfully.", status));
+    }
+
+    /// <summary>
+    /// Restore timesheet access for employee (Manager only)
+    /// </summary>
+    [HttpPost("access-status/restore/{employeeId:int}")]
     [Authorize(Roles = "Manager")]
-    public async Task<IActionResult> GetTeam([FromQuery] string? week, CancellationToken ct)
+    public async Task<IActionResult> RestoreAccess(int employeeId, CancellationToken ct)
     {
         var managerId = GetCallerEmployeeId();
-        DateOnly weekStart;
-
-        if (!string.IsNullOrEmpty(week))
-        {
-            if (!DateOnly.TryParseExact(week, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out weekStart))
-                return BadRequest(new { error = "Invalid week format. Use DD-MM-YYYY." });
-        }
-        else
-        {
-            // Current week's Monday
-            var today = DateTime.UtcNow;
-            var daysBack = ((int)today.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
-            weekStart = DateOnly.FromDateTime(today.AddDays(-daysBack));
-        }
-
-        var timesheets = await _timesheetService.GetTeamTimesheetsAsync(managerId, weekStart, ct);
-        return Ok(timesheets);
+        var result = await _accessService.RestoreAccessAsync(managerId, employeeId, ct);
+        return Ok(new ApiResponse<TimesheetAccessStatusDto>(true, "Access restored successfully.", result));
     }
 
     /// <summary>
-    /// Check if employee missed last week's timesheet submission (Employee only)
+    /// Manually trigger timesheet reminder process (Admin only) - For testing and operational purposes
     /// </summary>
-    /// <param name="ct">Cancellation token</param>
-    /// <response code="200">Missed check result</response>
-    /// <response code="401">Unauthorized</response>
-    [HttpGet("missed-check")]
-    [Authorize(Roles = "Employee")]
-    public async Task<IActionResult> CheckMissed(CancellationToken ct)
+    [HttpPost("reminders/process")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ProcessReminders(CancellationToken ct)
     {
-        var empId = GetCallerEmployeeId();
-        var hasMissed = await _timesheetService.HasMissedLastWeekAsync(empId, ct);
-        return Ok(new { hasMissed });
-    }
-
-    /// <summary>
-    /// Get employee's active allocations for a specific week (Employee only)
-    /// </summary>
-    /// <param name="week">Week start date in DD-MM-YYYY format</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <response code="200">Active allocations for the week</response>
-    /// <response code="400">Invalid date format</response>
-    /// <response code="401">Unauthorized</response>
-    [HttpGet("week-allocations")]
-    [Authorize(Roles = "Employee")]
-    public async Task<IActionResult> GetWeekAllocations([FromQuery] string week, CancellationToken ct)
-    {
-        var empId = GetCallerEmployeeId();
-        if (!DateOnly.TryParseExact(week, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var weekStart))
-            return BadRequest(new { error = "Invalid week format. Use DD-MM-YYYY." });
-
-        var allocations = await _allocationService.GetActiveAllocationsForWeekAsync(empId, weekStart, ct);
-        return Ok(allocations);
+        await _accessService.ProcessDailyAsync(ct);
+        
+        var result = new RemindersProcessResultDto(
+            Success: true,
+            EmployeesChecked: 0,
+            Reminders1Sent: 0,
+            Reminders2Sent: 0,
+            AccountsFrozen: 0,
+            AlreadySubmitted: 0,
+            Message: "Reminder process executed successfully. Check logs for details.",
+            ProcessedAt: DateTime.UtcNow);
+        
+        return Ok(new ApiResponse<RemindersProcessResultDto>(
+            true, 
+            "Timesheet reminder process triggered successfully.", 
+            result));
     }
 
     private int GetCallerEmployeeId()

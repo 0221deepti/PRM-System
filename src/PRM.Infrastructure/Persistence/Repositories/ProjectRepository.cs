@@ -24,12 +24,13 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
     public async Task<Project?> GetWithAllocationsAsync(int projectId, CancellationToken ct = default)
         => await _set
             .Include(p => p.Milestones)
-            .Include(p => p.Allocations).ThenInclude(a => a.User)
+            .Include(p => p.Allocations).ThenInclude(a => a.User).ThenInclude(u => u.Skills).ThenInclude(s => s.Skill)
             .FirstOrDefaultAsync(p => p.Id == projectId, ct);
 
     public async Task<IEnumerable<Project>> GetAllWithDetailsAsync(CancellationToken ct = default)
         => await _set
             .Include(p => p.Manager)
             .Include(p => p.Milestones)
+            .Include(p => p.Allocations).ThenInclude(a => a.User).ThenInclude(u => u.Skills).ThenInclude(s => s.Skill)
             .ToListAsync(ct);
 }

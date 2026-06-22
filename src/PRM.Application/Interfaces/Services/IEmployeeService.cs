@@ -6,10 +6,10 @@ public interface IEmployeeService
 {
     Task<IEnumerable<EmployeeSummaryDto>> GetAllEmployeesAsync(CancellationToken ct);
     Task<IEnumerable<EmployeeSummaryDto>> GetTeamEmployeesAsync(int managerEmployeeId, CancellationToken ct);
-    Task<EmployeeDetailDto?> GetEmployeeDetailAsync(int employeeId, CancellationToken ct);
+    Task<EmployeeDetailDto?> GetEmployeeDetailAsync(int employeeId, int callerUserId, string callerRole, CancellationToken ct);
     Task UpdateEmployeeAsync(int employeeId, UpdateEmployeeDto dto, CancellationToken ct);
     Task DeactivateEmployeeAsync(int employeeId, CancellationToken ct);
-    Task AssignManagerAsync(int employeeUserId, int managerUserId, CancellationToken ct);
+    Task<string?> AssignManagerAsync(int employeeUserId, int managerUserId, CancellationToken ct);
     Task<EmployeeDetailDto?> GetEmployeeByUserIdAsync(int userId, CancellationToken ct);
 }
 

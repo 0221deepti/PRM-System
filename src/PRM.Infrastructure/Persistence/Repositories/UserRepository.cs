@@ -10,6 +10,9 @@ public class UserRepository : Repository<User>, IUserRepository
 {
     public UserRepository(PrmDbContext db) : base(db) { }
 
+    public override async Task<User?> GetByIdAsync(int id, CancellationToken ct = default)
+        => await _set.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == id, ct);
+
     public async Task<User?> GetByUsernameAsync(string username, CancellationToken ct = default)
         => await _set
             .Include(u => u.Role)

@@ -1,9 +1,11 @@
 using FluentAssertions;
 using Moq;
+using Microsoft.Extensions.Logging;
 using PRM.Application.DTOs.Ai;
 using PRM.Application.Interfaces.Repositories;
 using PRM.Domain.Entities;
 using PRM.Domain.Enums;
+using PRM.Domain.Exceptions;
 using PRM.Infrastructure.AI;
 using PRM.Infrastructure.Services;
 using System.Text.Json;
@@ -19,6 +21,8 @@ public class AiServiceTests
     private readonly Mock<ISystemConfigRepository> _configRepoMock;
     private readonly Mock<IAiProviderFactory> _providerFactoryMock;
     private readonly Mock<ILlmProvider> _llmProviderMock;
+    private readonly Mock<ILogger<AiService>> _loggerMock;
+    private readonly Mock<Microsoft.Extensions.Configuration.IConfiguration> _configurationMock;
     private readonly AiService _service;
 
     public AiServiceTests()
@@ -30,6 +34,8 @@ public class AiServiceTests
         _configRepoMock = new Mock<ISystemConfigRepository>();
         _providerFactoryMock = new Mock<IAiProviderFactory>();
         _llmProviderMock = new Mock<ILlmProvider>();
+        _loggerMock = new Mock<ILogger<AiService>>();
+        _configurationMock = new Mock<Microsoft.Extensions.Configuration.IConfiguration>();
 
         _service = new AiService(
             _employeeRepoMock.Object,
@@ -37,7 +43,9 @@ public class AiServiceTests
             _timesheetRepoMock.Object,
             _allocationRepoMock.Object,
             _configRepoMock.Object,
-            _providerFactoryMock.Object
+            _providerFactoryMock.Object,
+            _configurationMock.Object,
+            _loggerMock.Object
         );
     }
 
@@ -137,5 +145,91 @@ public class AiServiceTests
 
         result.AdditionalInsights.Should().Be("2 requested resources were found.");
         result.FutureExtensibilityNotes.Should().Be("Shortage predicted: None.");
+    }
+
+    [Fact]
+    public async Task BuildTeamAsync_RequirementTooShort_ThrowsDomainException()
+    {
+        // Arrange
+        var request = new TeamBuilderRequestDto(1, "abc"); // Less than 5 characters
+
+        // Act
+        Func<Task> act = async () => await _service.BuildTeamAsync(request, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<DomainException>()
+            .WithMessage("Natural language requirement must be at least 5 characters.");
+    }
+
+    [Fact]
+    public async Task BuildTeamAsync_TimeoutException_ThrowsFriendlyException()
+    {
+        // Arrange
+        var request = new TeamBuilderRequestDto(1, "I need some developer resources for my React project.");
+        var config = new SystemConfig { LlmProvider = "LocalGemma" };
+        
+        _employeeRepoMock.Setup(r => r.GetAllWithDetailsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<User> { new User { Id = 101, IsActive = true, Role = new Role { Name = "Employee" } } });
+        _configRepoMock.Setup(r => r.GetAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(config);
+        _providerFactoryMock.Setup(f => f.Create(config))
+            .Returns(_llmProviderMock.Object);
+        _llmProviderMock.Setup(p => p.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException());
+
+        // Act
+        Func<Task> act = async () => await _service.BuildTeamAsync(request, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<DomainException>()
+            .WithMessage("AI service is currently unavailable. Please try again later.");
+    }
+
+    [Fact]
+    public async Task BuildTeamAsync_ProviderException_ThrowsFriendlyException()
+    {
+        // Arrange
+        var request = new TeamBuilderRequestDto(1, "I need some developer resources for my React project.");
+        var config = new SystemConfig { LlmProvider = "LocalGemma" };
+        
+        _employeeRepoMock.Setup(r => r.GetAllWithDetailsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<User> { new User { Id = 101, IsActive = true, Role = new Role { Name = "Employee" } } });
+        _configRepoMock.Setup(r => r.GetAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(config);
+        _providerFactoryMock.Setup(f => f.Create(config))
+            .Returns(_llmProviderMock.Object);
+        _llmProviderMock.Setup(p => p.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Ollama server down"));
+
+        // Act
+        Func<Task> act = async () => await _service.BuildTeamAsync(request, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<DomainException>()
+            .WithMessage("AI service is currently unavailable. Please try again later.");
+    }
+
+    [Fact]
+    public async Task BuildTeamAsync_InvalidJsonResponse_ThrowsFriendlyException()
+    {
+        // Arrange
+        var request = new TeamBuilderRequestDto(1, "I need some developer resources for my React project.");
+        var config = new SystemConfig { LlmProvider = "LocalGemma" };
+        
+        _employeeRepoMock.Setup(r => r.GetAllWithDetailsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<User> { new User { Id = 101, IsActive = true, Role = new Role { Name = "Employee" } } });
+        _configRepoMock.Setup(r => r.GetAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(config);
+        _providerFactoryMock.Setup(f => f.Create(config))
+            .Returns(_llmProviderMock.Object);
+        _llmProviderMock.Setup(p => p.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Not JSON response at all");
+
+        // Act
+        Func<Task> act = async () => await _service.BuildTeamAsync(request, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<DomainException>()
+            .WithMessage("AI service is currently unavailable. Please try again later.");
     }
 }

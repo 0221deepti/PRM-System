@@ -1,9 +1,11 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PRM.Api.Middleware;
+using PRM.Application.DTOs.Common;
 using PRM.Application.Interfaces.Repositories;
 using PRM.Application.Interfaces.Services;
 using PRM.Application.Services;
@@ -16,7 +18,20 @@ using PRM.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(e => e.Value != null && e.Value.Errors.Count > 0)
+                .SelectMany(e => e.Value!.Errors.Select(er => new ValidationErrorDto(e.Key, er.ErrorMessage)))
+                .ToList();
+
+            var response = new ApiResponse(false, "Validation Failed", errors);
+            return new BadRequestObjectResult(response);
+        };
+    });
 
 // Swagger/OpenAPI
 builder.Services.AddSwaggerGen(opts =>
@@ -99,6 +114,9 @@ builder.Services.AddScoped<IAllocationRepository, AllocationRepository>();
 builder.Services.AddScoped<ITimesheetRepository, TimesheetRepository>();
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<ISystemConfigRepository, SystemConfigRepository>();
+builder.Services.AddScoped<IEmployeeAccessStatusRepository, EmployeeAccessStatusRepository>();
+builder.Services.AddScoped<IEmailTemplateRepository, EmailTemplateRepository>();
+builder.Services.AddScoped<INotificationHistoryRepository, NotificationHistoryRepository>();
 
 // Generic repository for new entities
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
@@ -115,13 +133,18 @@ builder.Services.AddScoped<IMilestoneService, MilestoneService>();
 builder.Services.AddScoped<ISystemConfigService, SystemConfigService>();
 builder.Services.AddScoped<IAiService, AiService>();
 builder.Services.AddScoped<IHealthFlaggingService, HealthFlaggingService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<ITimesheetAccessService, TimesheetAccessService>();
+builder.Services.AddScoped<IProjectRiskNotificationService, ProjectRiskNotificationService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
 
 // AI Provider Factory (Strategy + Factory Pattern)
 builder.Services.AddSingleton<IAiProviderFactory, AiProviderFactory>();
 
 // Background Scheduler
 builder.Services.AddHostedService<HealthFlaggingScheduler>();
+builder.Services.AddHostedService<TimesheetAccessScheduler>();
 
 var app = builder.Build();
 
@@ -158,3 +181,5 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+public partial class Program { }

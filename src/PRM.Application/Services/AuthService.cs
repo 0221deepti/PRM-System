@@ -10,24 +10,24 @@ public class AuthService : IAuthService
     private readonly IUserRepository _users;
     private readonly IEmployeeRepository _employees;
     private readonly ITokenService _tokenService;
+    private readonly IEmailService _emailService;
 
-    public AuthService(IUserRepository users, IEmployeeRepository employees, ITokenService tokenService)
+    public AuthService(IUserRepository users, IEmployeeRepository employees, ITokenService tokenService, IEmailService emailService)
     {
         _users = users;
         _employees = employees;
         _tokenService = tokenService;
+        _emailService = emailService;
     }
 
     public async Task<LoginResponseDto> LoginAsync(string username, string password, CancellationToken ct)
     {
-        var user = await _users.GetByUsernameAsync(username, ct)
-                   ?? throw new EntityNotFoundException("Invalid credentials.");
+        var user = await _users.GetByUsernameAsync(username, ct);
+        if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+            throw new PrmAuthenticationException("Invalid credentials.");
 
         if (!user.IsActive)
-            throw new DomainException("Account is deactivated.");
-
-        if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
-            throw new DomainException("Invalid credentials.");
+            throw new PrmAuthenticationException("Account is deactivated.");
 
         var employee = await _employees.GetByUserIdAsync(user.Id, ct);
         var employeeId = employee?.Id ?? 0;
@@ -37,7 +37,7 @@ public class AuthService : IAuthService
         return new LoginResponseDto(token, user.ForcePasswordChange, user.Role?.Name ?? "User", user.FullName, user.Id, employeeId);
     }
 
-    public async Task ChangePasswordAsync(int userId, string newPassword, CancellationToken ct)
+    public async Task<string?> ChangePasswordAsync(int userId, string newPassword, CancellationToken ct)
     {
         ValidatePasswordStrength(newPassword);
 
@@ -49,9 +49,29 @@ public class AuthService : IAuthService
 
         _users.Update(user);
         await _users.SaveChangesAsync(ct);
+
+        string? warningMessage = null;
+        try
+        {
+            var placeholders = new Dictionary<string, string>
+            {
+                ["EmployeeName"] = user.FullName,
+                ["Username"] = user.Username
+            };
+            var emailResult = await _emailService.SendTemplateEmailAsync("Password Changed Confirmation", user.Email, placeholders, ct);
+            if (!emailResult.IsSuccess)
+            {
+                warningMessage = "Unable to send notification email. The requested operation completed successfully, but email delivery failed.";
+            }
+        }
+        catch (Exception)
+        {
+            warningMessage = "Unable to send notification email. The requested operation completed successfully, but email delivery failed.";
+        }
+        return warningMessage;
     }
 
-    public async Task ResetPasswordAsync(int targetUserId, string newPassword, CancellationToken ct)
+    public async Task<string?> ResetPasswordAsync(int targetUserId, string newPassword, CancellationToken ct)
     {
         ValidatePasswordStrength(newPassword);
 
@@ -63,6 +83,26 @@ public class AuthService : IAuthService
 
         _users.Update(user);
         await _users.SaveChangesAsync(ct);
+
+        string? warningMessage = null;
+        try
+        {
+            var placeholders = new Dictionary<string, string>
+            {
+                ["EmployeeName"] = user.FullName,
+                ["Username"] = user.Username
+            };
+            var emailResult = await _emailService.SendTemplateEmailAsync("Password Changed Confirmation", user.Email, placeholders, ct);
+            if (!emailResult.IsSuccess)
+            {
+                warningMessage = "Unable to send notification email. The requested operation completed successfully, but email delivery failed.";
+            }
+        }
+        catch (Exception)
+        {
+            warningMessage = "Unable to send notification email. The requested operation completed successfully, but email delivery failed.";
+        }
+        return warningMessage;
     }
 
     private static void ValidatePasswordStrength(string password)

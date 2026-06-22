@@ -22,6 +22,10 @@ public class PrmDbContext : DbContext
     public DbSet<ActivityTag> ActivityTags => Set<ActivityTag>();
     public DbSet<TimesheetEntryTag> TimesheetEntryTags => Set<TimesheetEntryTag>();
     public DbSet<SystemConfig> SystemConfigs => Set<SystemConfig>();
+    public DbSet<EmployeeAccessStatus> EmployeeAccessStatuses => Set<EmployeeAccessStatus>();
+    public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
+    public DbSet<NotificationHistory> NotificationHistories => Set<NotificationHistory>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

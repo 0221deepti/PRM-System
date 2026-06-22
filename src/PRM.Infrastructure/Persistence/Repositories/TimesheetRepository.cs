@@ -22,7 +22,8 @@ public class TimesheetRepository : Repository<Timesheet>, ITimesheetRepository
             .Include(t => t.User)
             .Include(t => t.Project)
             .Include(t => t.Entries)
-            .Where(t => t.WeekStartDate == weekStart && t.User.ManagerId == managerId)
+            .Where(t => t.WeekStartDate == weekStart && 
+                       (t.User.ManagerId == managerId || t.Project.ManagerId == managerId))
             .ToListAsync(ct);
 
     public async Task<bool> ExistsAsync(int userId, int projectId, DateOnly weekStart, CancellationToken ct = default)

@@ -6,7 +6,7 @@ namespace PRM.Application.Interfaces.Services;
 
 public interface IUserService
 {
-    Task<UserSummaryDto> CreateUserAsync(CreateUserDto dto, CancellationToken ct);
+    Task<(UserSummaryDto User, string? WarningMessage)> CreateUserAsync(CreateUserDto dto, CancellationToken ct);
     Task<IEnumerable<UserSummaryDto>> GetAllUsersAsync(CancellationToken ct);
     Task DeactivateUserAsync(int userId, CancellationToken ct);
     Task ReactivateUserAsync(int userId, CancellationToken ct);

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PRM.Application.DTOs.Auth;
+using PRM.Application.DTOs.Common;
 using PRM.Application.Interfaces.Services;
 
 namespace PRM.Api.Controllers;
@@ -30,7 +31,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Login([FromBody] LoginRequestDto dto, CancellationToken ct)
     {
         var result = await _authService.LoginAsync(dto.Username, dto.Password, ct);
-        return Ok(result);
+        return Ok(new ApiResponse<LoginResponseDto>(true, "Login successful.", result));
     }
 
     /// <summary>
@@ -46,11 +47,12 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto, CancellationToken ct)
     {
         if (dto.NewPassword != dto.ConfirmPassword)
-            return BadRequest(new { error = "Passwords do not match." });
+            return BadRequest(new ApiResponse(false, "Passwords do not match."));
 
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        await _authService.ChangePasswordAsync(userId, dto.NewPassword, ct);
-        return Ok(new { message = "Password updated successfully." });
+        var warning = await _authService.ChangePasswordAsync(userId, dto.NewPassword, ct);
+        var msg = warning ?? "Password updated successfully.";
+        return Ok(new ApiResponse(true, msg));
     }
 
     /// <summary>
@@ -66,7 +68,8 @@ public class AuthController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> ResetPassword(int userId, [FromBody] ResetPasswordDto dto, CancellationToken ct)
     {
-        await _authService.ResetPasswordAsync(userId, dto.NewPassword, ct);
-        return Ok(new { message = "Password reset. User will be prompted to change it on next login." });
+        var warning = await _authService.ResetPasswordAsync(userId, dto.NewPassword, ct);
+        var msg = warning ?? "Password reset. User will be prompted to change it on next login.";
+        return Ok(new ApiResponse(true, msg));
     }
 }

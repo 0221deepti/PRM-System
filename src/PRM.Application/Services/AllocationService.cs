@@ -13,21 +13,36 @@ public class AllocationService : IAllocationService
     private readonly IAllocationRepository _allocations;
     private readonly IUserRepository _users;
     private readonly IProjectRepository _projects;
+    private readonly IEmailService _emailService;
 
     public AllocationService(
         IAllocationRepository allocations,
         IUserRepository users,
-        IProjectRepository projects)
+        IProjectRepository projects,
+        IEmailService emailService)
     {
         _allocations = allocations;
         _users = users;
         _projects = projects;
+        _emailService = emailService;
     }
 
-    public async Task<AllocationSummaryDto> AllocateAsync(CreateAllocationDto dto, int managerUserId, CancellationToken ct)
+    public async Task<(AllocationSummaryDto Allocation, string? WarningMessage)> AllocateAsync(CreateAllocationDto dto, int managerUserId, CancellationToken ct)
     {
+        var employee = await _users.GetByIdAsync(dto.UserId, ct)
+                       ?? throw new EntityNotFoundException("Employee not found.");
+
+        if (employee.ManagerId != managerUserId)
+            throw new DomainException("You can only allocate employees who report to you.");
+
+        if (!employee.IsActive)
+            throw new DomainException("Cannot allocate resources to an inactive employee.");
+
         var project = await _projects.GetByIdAsync(dto.ProjectId, ct)
                       ?? throw new EntityNotFoundException("Project not found.");
+
+        if (project.ManagerId != managerUserId)
+            throw new DomainException("The selected project is not managed by you.");
 
         if (project.Status == ProjectStatus.Completed || project.Status == ProjectStatus.OnHold)
             throw new DomainException("Cannot allocate to a project that is Completed or On Hold.");
@@ -35,8 +50,20 @@ public class AllocationService : IAllocationService
         if (dto.FromDate >= dto.ToDate)
             throw new DomainException("FromDate must be before ToDate.");
 
+        if (dto.FromDate < project.StartDate || dto.ToDate > project.EndDate)
+            throw new DomainException($"Allocation dates ({dto.FromDate} to {dto.ToDate}) must fall within the project duration ({project.StartDate} to {project.EndDate}).");
+
         if (dto.UtilisationPercent < 1 || dto.UtilisationPercent > 100)
             throw new DomainException("Utilisation percent must be between 1 and 100.");
+
+        // Prevent duplicate project allocation in overlapping periods
+        var activeAllocs = await _allocations.GetActiveByUserAsync(dto.UserId, ct);
+        var isAlreadyAllocated = activeAllocs.Any(a => 
+            a.ProjectId == dto.ProjectId && 
+            a.FromDate <= dto.ToDate && 
+            a.ToDate >= dto.FromDate);
+        if (isAlreadyAllocated)
+            throw new DomainException("Employee is already allocated to this project during the specified period.");
 
         var existing = await _allocations.GetTotalUtilisationAsync(
                            dto.UserId, dto.FromDate, dto.ToDate, null, ct);
@@ -61,7 +88,7 @@ public class AllocationService : IAllocationService
         await UpdateUserStatusAsync(dto.UserId, ct);
 
         var user = await _users.GetWithSkillsAsync(dto.UserId, ct);
-        return new AllocationSummaryDto(
+        var summary = new AllocationSummaryDto(
             allocation.Id,
             allocation.UserId,
             user?.FullName ?? "",
@@ -70,6 +97,32 @@ public class AllocationService : IAllocationService
             allocation.UtilisationPercent,
             allocation.FromDate,
             allocation.ToDate);
+
+        string? warningMessage = null;
+        try
+        {
+            var manager = await _users.GetByIdAsync(managerUserId, ct);
+            var placeholders = new Dictionary<string, string>
+            {
+                ["EmployeeName"] = user?.FullName ?? employee.FullName,
+                ["ProjectName"] = project.Name,
+                ["ManagerName"] = manager?.FullName ?? "Reporting Manager",
+                ["UtilisationPercent"] = allocation.UtilisationPercent.ToString(),
+                ["FromDate"] = allocation.FromDate.ToString("yyyy-MM-dd"),
+                ["ToDate"] = allocation.ToDate.ToString("yyyy-MM-dd")
+            };
+            var emailResult = await _emailService.SendTemplateEmailAsync("Resource Allocation Notification", employee.Email, placeholders, ct);
+            if (!emailResult.IsSuccess)
+            {
+                warningMessage = "Unable to send notification email. The requested operation completed successfully, but email delivery failed.";
+            }
+        }
+        catch (Exception)
+        {
+            warningMessage = "Unable to send notification email. The requested operation completed successfully, but email delivery failed.";
+        }
+
+        return (summary, warningMessage);
     }
 
     public async Task EndAllocationAsync(int allocationId, int managerUserId, CancellationToken ct)
@@ -81,7 +134,7 @@ public class AllocationService : IAllocationService
                       ?? throw new EntityNotFoundException("Project not found.");
 
         if (project.ManagerId != managerUserId)
-            throw new PrmUnauthorizedException("Only the project manager can end this allocation.");
+            throw new DomainException("The selected project is not managed by you.");
 
         allocation.ToDate = DateOnly.FromDateTime(DateTime.UtcNow);
         allocation.IsActive = false;
@@ -97,8 +150,14 @@ public class AllocationService : IAllocationService
         return allocations.Select(MapToDto);
     }
 
-    public async Task<IEnumerable<AllocationSummaryDto>> GetActiveAllocationsByProjectAsync(int projectId, CancellationToken ct)
+    public async Task<IEnumerable<AllocationSummaryDto>> GetActiveAllocationsByProjectAsync(int projectId, int callerUserId, string callerRole, CancellationToken ct)
     {
+        var project = await _projects.GetByIdAsync(projectId, ct)
+                      ?? throw new EntityNotFoundException("Project not found.");
+
+        if (callerRole == "Manager" && project.ManagerId != callerUserId)
+            throw new DomainException("The selected project is not managed by you.");
+
         var allocations = await _allocations.GetActiveByProjectAsync(projectId, ct);
         return allocations.Select(MapToDto);
     }

@@ -11,8 +11,8 @@ using PRM.Infrastructure.Persistence;
 namespace PRM.Infrastructure.Migrations
 {
     [DbContext(typeof(PrmDbContext))]
-    [Migration("20260616122353_SyncModelChanges")]
-    partial class SyncModelChanges
+    [Migration("20260702111423_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -94,6 +94,134 @@ namespace PRM.Infrastructure.Migrations
                     b.ToTable("Allocations");
                 });
 
+            modelBuilder.Entity("PRM.Domain.Entities.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("PerformedByUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ProjectId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("EventType");
+
+                    b.HasIndex("PerformedByUserId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("AuditLogs");
+                });
+
+            modelBuilder.Entity("PRM.Domain.Entities.EmailTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("EmailTemplates");
+                });
+
+            modelBuilder.Entity("PRM.Domain.Entities.EmployeeAccessStatus", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("FreezeDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsTimesheetFrozen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("Reminder1SentDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("Reminder2SentDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("RestoredBy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("RestoredDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("TrackedWeekStartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestoredBy");
+
+                    b.HasIndex("EmployeeId", "TrackedWeekStartDate")
+                        .IsUnique();
+
+                    b.ToTable("EmployeeAccessStatuses");
+                });
+
             modelBuilder.Entity("PRM.Domain.Entities.Milestone", b =>
                 {
                     b.Property<int>("Id")
@@ -127,6 +255,42 @@ namespace PRM.Infrastructure.Migrations
                     b.HasIndex("ProjectId");
 
                     b.ToTable("Milestones");
+                });
+
+            modelBuilder.Entity("PRM.Domain.Entities.NotificationHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("NotificationType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("SentDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SentTo")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "NotificationType", "SentTo");
+
+                    b.ToTable("NotificationHistories");
                 });
 
             modelBuilder.Entity("PRM.Domain.Entities.Permission", b =>
@@ -203,6 +367,9 @@ namespace PRM.Infrastructure.Migrations
 
                     b.HasIndex("ManagerId");
 
+                    b.HasIndex("Name")
+                        .IsUnique();
+
                     b.ToTable("Projects");
                 });
 
@@ -278,12 +445,16 @@ namespace PRM.Infrastructure.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
 
                     b.ToTable("Skills");
                 });
@@ -299,18 +470,22 @@ namespace PRM.Infrastructure.Migrations
 
                     b.Property<string>("LlmApiKey")
                         .IsRequired()
+                        .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("LlmApiUrl")
                         .IsRequired()
+                        .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("LlmModelName")
                         .IsRequired()
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("LlmProvider")
                         .IsRequired()
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("MaxWeeklyHours")
@@ -540,10 +715,63 @@ namespace PRM.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("PRM.Domain.Entities.AuditLog", b =>
+                {
+                    b.HasOne("PRM.Domain.Entities.User", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PRM.Domain.Entities.User", "PerformedByUser")
+                        .WithMany()
+                        .HasForeignKey("PerformedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PRM.Domain.Entities.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("PerformedByUser");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("PRM.Domain.Entities.EmployeeAccessStatus", b =>
+                {
+                    b.HasOne("PRM.Domain.Entities.User", "Employee")
+                        .WithMany("AccessStatuses")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PRM.Domain.Entities.User", "RestoredByUser")
+                        .WithMany()
+                        .HasForeignKey("RestoredBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("RestoredByUser");
+                });
+
             modelBuilder.Entity("PRM.Domain.Entities.Milestone", b =>
                 {
                     b.HasOne("PRM.Domain.Entities.Project", "Project")
                         .WithMany("Milestones")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("PRM.Domain.Entities.NotificationHistory", b =>
+                {
+                    b.HasOne("PRM.Domain.Entities.Project", "Project")
+                        .WithMany("NotificationHistories")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -682,6 +910,8 @@ namespace PRM.Infrastructure.Migrations
                     b.Navigation("Allocations");
 
                     b.Navigation("Milestones");
+
+                    b.Navigation("NotificationHistories");
                 });
 
             modelBuilder.Entity("PRM.Domain.Entities.Role", b =>
@@ -708,6 +938,8 @@ namespace PRM.Infrastructure.Migrations
 
             modelBuilder.Entity("PRM.Domain.Entities.User", b =>
                 {
+                    b.Navigation("AccessStatuses");
+
                     b.Navigation("Allocations");
 
                     b.Navigation("DirectReports");

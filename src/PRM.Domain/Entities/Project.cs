@@ -17,4 +17,5 @@ public class Project : BaseEntity
     public User Manager { get; set; } = null!;
     public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public ICollection<Allocation> Allocations { get; set; } = new List<Allocation>();
+    public ICollection<NotificationHistory> NotificationHistories { get; set; } = new List<NotificationHistory>();
 }

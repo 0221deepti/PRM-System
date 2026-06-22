@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PRM.Application.DTOs.Common;
 using PRM.Application.DTOs.Employee;
 using PRM.Application.Interfaces.Services;
 
@@ -38,15 +39,15 @@ public class EmployeesController : ControllerBase
         {
             var managerEmpId = GetCallerEmployeeId();
             var team = await _employeeService.GetTeamEmployeesAsync(managerEmpId, ct);
-            return Ok(team);
+            return Ok(new ApiResponse<IEnumerable<EmployeeSummaryDto>>(true, "Team employees retrieved successfully.", team));
         }
 
         // Admin only
         if (!User.IsInRole("Admin"))
-            return Forbid();
+            return StatusCode(403, new ApiResponse(false, "Forbidden - Admin role required."));
 
         var all = await _employeeService.GetAllEmployeesAsync(ct);
-        return Ok(all);
+        return Ok(new ApiResponse<IEnumerable<EmployeeSummaryDto>>(true, "All employees retrieved successfully.", all));
     }
 
     /// <summary>
@@ -59,9 +60,11 @@ public class EmployeesController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetDetail(int id, CancellationToken ct)
     {
-        var emp = await _employeeService.GetEmployeeDetailAsync(id, ct);
-        if (emp == null) return NotFound();
-        return Ok(emp);
+        var callerId = GetCallerEmployeeId();
+        var callerRole = User.FindFirstValue(ClaimTypes.Role) ?? "";
+        var emp = await _employeeService.GetEmployeeDetailAsync(id, callerId, callerRole, ct);
+        if (emp == null) return NotFound(new ApiResponse(false, "Employee not found."));
+        return Ok(new ApiResponse<EmployeeDetailDto>(true, "Employee details retrieved successfully.", emp));
     }
 
     /// <summary>
@@ -77,8 +80,8 @@ public class EmployeesController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var emp = await _employeeService.GetEmployeeByUserIdAsync(userId, ct);
-        if (emp == null) return NotFound();
-        return Ok(emp);
+        if (emp == null) return NotFound(new ApiResponse(false, "Employee profile not found."));
+        return Ok(new ApiResponse<EmployeeDetailDto>(true, "Profile retrieved successfully.", emp));
     }
 
     /// <summary>
@@ -95,7 +98,7 @@ public class EmployeesController : ControllerBase
     public async Task<IActionResult> Update(int id, [FromBody] UpdateEmployeeDto dto, CancellationToken ct)
     {
         await _employeeService.UpdateEmployeeAsync(id, dto, ct);
-        return Ok(new { message = "Employee updated." });
+        return Ok(new ApiResponse(true, "Employee updated successfully."));
     }
 
     /// <summary>
@@ -111,7 +114,7 @@ public class EmployeesController : ControllerBase
     public async Task<IActionResult> Deactivate(int id, CancellationToken ct)
     {
         await _employeeService.DeactivateEmployeeAsync(id, ct);
-        return Ok(new { message = "Employee deactivated." });
+        return Ok(new ApiResponse(true, "Employee deactivated successfully."));
     }
 
     /// <summary>
@@ -127,8 +130,9 @@ public class EmployeesController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AssignManager(int id, [FromBody] AssignManagerDto dto, CancellationToken ct)
     {
-        await _employeeService.AssignManagerAsync(dto.EmployeeUserId, dto.ManagerUserId, ct);
-        return Ok(new { message = "Manager assigned." });
+        var warning = await _employeeService.AssignManagerAsync(dto.EmployeeUserId, dto.ManagerUserId, ct);
+        var msg = warning ?? "Manager assigned successfully.";
+        return Ok(new ApiResponse(true, msg));
     }
 
     /// <summary>
@@ -146,7 +150,7 @@ public class EmployeesController : ControllerBase
     public async Task<IActionResult> AddSkill(int id, [FromBody] AddSkillDto dto, CancellationToken ct)
     {
         await _skillService.AddSkillAsync(id, dto, ct);
-        return Ok(new { message = "Skill added." });
+        return Ok(new ApiResponse(true, "Skill added successfully."));
     }
 
     /// <summary>
@@ -164,7 +168,7 @@ public class EmployeesController : ControllerBase
     public async Task<IActionResult> UpdateSkill(int id, int skillId, [FromBody] UpdateSkillDto dto, CancellationToken ct)
     {
         await _skillService.UpdateSkillProficiencyAsync(id, skillId, dto, ct);
-        return Ok(new { message = "Skill updated." });
+        return Ok(new ApiResponse(true, "Skill updated successfully."));
     }
 
     /// <summary>
@@ -181,7 +185,7 @@ public class EmployeesController : ControllerBase
     public async Task<IActionResult> RemoveSkill(int id, int skillId, CancellationToken ct)
     {
         await _skillService.RemoveSkillAsync(id, skillId, ct);
-        return Ok(new { message = "Skill removed." });
+        return Ok(new ApiResponse(true, "Skill removed successfully."));
     }
 
     private int GetCallerEmployeeId()

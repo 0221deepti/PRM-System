@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Moq;
 using PRM.Application.Interfaces.Repositories;
+using PRM.Application.Interfaces.Services;
 using PRM.Application.Services;
 using PRM.Domain.Entities;
 using PRM.Domain.Enums;
@@ -13,6 +14,7 @@ public class EmployeeServiceTests
     private readonly Mock<IEmployeeRepository> _employeeRepoMock;
     private readonly Mock<IUserRepository> _userRepoMock;
     private readonly Mock<IAllocationRepository> _allocationRepoMock;
+    private readonly Mock<IEmailService> _emailServiceMock;
     private readonly EmployeeService _service;
 
     public EmployeeServiceTests()
@@ -20,8 +22,16 @@ public class EmployeeServiceTests
         _employeeRepoMock = new Mock<IEmployeeRepository>();
         _userRepoMock = new Mock<IUserRepository>();
         _allocationRepoMock = new Mock<IAllocationRepository>();
+        _emailServiceMock = new Mock<IEmailService>();
 
-        _service = new EmployeeService(_employeeRepoMock.Object, _userRepoMock.Object, _allocationRepoMock.Object);
+        _emailServiceMock.Setup(x => x.SendTemplateEmailAsync(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<IReadOnlyDictionary<string, string>>(),
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PRM.Application.DTOs.Notification.EmailSendResultDto("test@gmail.com", true, null));
+
+        _service = new EmployeeService(_employeeRepoMock.Object, _userRepoMock.Object, _allocationRepoMock.Object, _emailServiceMock.Object);
     }
 
     [Fact]

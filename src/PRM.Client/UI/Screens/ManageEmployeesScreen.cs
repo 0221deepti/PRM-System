@@ -23,9 +23,10 @@ public class ManageEmployeesScreen : Screen
         Console.WriteLine("1. View Employee Detail");
         Console.WriteLine("2. Add Skill to Employee");
         Console.WriteLine("3. Deactivate Employee");
+        Console.WriteLine("4. Assign Manager to Employee");
         Console.WriteLine("0. Back");
 
-        var choice = InputHelper.ReadString("Select an option");
+        var choice = InputHelper.ReadMenuOption("Select an option", new[] { "1", "2", "3", "4", "0" });
         try
         {
             switch (choice)
@@ -47,12 +48,11 @@ public class ManageEmployeesScreen : Screen
                         ConsoleRenderer.Pause();
                     }
                     break;
+                case "4":
+                    await AssignManagerAsync();
+                    break;
                 case "0":
                     return false;
-                default:
-                    ConsoleRenderer.RenderError("Invalid option.");
-                    ConsoleRenderer.Pause();
-                    break;
             }
         }
         catch (Exception ex)
@@ -93,15 +93,23 @@ public class ManageEmployeesScreen : Screen
         var empId = InputHelper.ReadInt("Employee Id");
         var skillName = InputHelper.ReadString("Skill Name");
         Console.WriteLine("Category: 1. Backend  2. Frontend  3. DevOps  4. QA  5. Other");
-        var catChoice = InputHelper.ReadString("Category (1-5)");
-        var cat = catChoice == "2" ? SkillCategory.Frontend : catChoice == "3" ? SkillCategory.DevOps : catChoice == "4" ? SkillCategory.QA : catChoice == "5" ? SkillCategory.Other : SkillCategory.Backend;
+        var cat = InputHelper.ReadEnumSelection<SkillCategory>("Category", 5);
         Console.WriteLine("Proficiency: 1. Beginner  2. Intermediate  3. Advanced");
-        var profChoice = InputHelper.ReadString("Proficiency (1-3)");
-        var prof = profChoice == "2" ? SkillProficiency.Intermediate : profChoice == "3" ? SkillProficiency.Advanced : SkillProficiency.Beginner;
+        var prof = InputHelper.ReadEnumSelection<SkillProficiency>("Proficiency", 3);
 
         var dto = new AddSkillDto(skillName, cat, prof);
         await _services.Employees.AddSkillAsync(empId, dto);
         ConsoleRenderer.RenderSuccess("Skill added.");
+        ConsoleRenderer.Pause();
+    }
+
+    private async Task AssignManagerAsync()
+    {
+        var empId = InputHelper.ReadInt("Employee Id");
+        var managerId = InputHelper.ReadInt("Manager Id");
+        var dto = new AssignManagerDto(empId, managerId);
+        await _services.Employees.AssignManagerAsync(empId, dto);
+        ConsoleRenderer.RenderSuccess("Manager assigned successfully.");
         ConsoleRenderer.Pause();
     }
 }

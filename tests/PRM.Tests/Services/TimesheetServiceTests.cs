@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using PRM.Application.DTOs.Timesheet;
 using PRM.Application.Interfaces.Repositories;
+using PRM.Application.Interfaces.Services;
 using PRM.Application.Services;
 using PRM.Domain.Entities;
 using PRM.Domain.Exceptions;
@@ -17,6 +18,8 @@ public class TimesheetServiceTests
     private readonly Mock<IRepository<ActivityTag>> _tagRepoMock;
     private readonly Mock<IRepository<TimesheetEntry>> _entryRepoMock;
     private readonly Mock<IRepository<TimesheetEntryTag>> _entryTagRepoMock;
+    private readonly Mock<ITimesheetAccessService> _timesheetAccessServiceMock;
+    private readonly Mock<IProjectRepository> _projectRepoMock;
     private readonly TimesheetService _service;
 
     public TimesheetServiceTests()
@@ -28,6 +31,12 @@ public class TimesheetServiceTests
         _tagRepoMock = new Mock<IRepository<ActivityTag>>();
         _entryRepoMock = new Mock<IRepository<TimesheetEntry>>();
         _entryTagRepoMock = new Mock<IRepository<TimesheetEntryTag>>();
+        _timesheetAccessServiceMock = new Mock<ITimesheetAccessService>();
+        _projectRepoMock = new Mock<IProjectRepository>();
+
+        // Default setup: project exists
+        _projectRepoMock.Setup(p => p.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Project());
 
         _service = new TimesheetService(
             _timesheetRepoMock.Object,
@@ -36,7 +45,9 @@ public class TimesheetServiceTests
             _userRepoMock.Object,
             _tagRepoMock.Object,
             _entryRepoMock.Object,
-            _entryTagRepoMock.Object);
+            _entryTagRepoMock.Object,
+            _timesheetAccessServiceMock.Object,
+            _projectRepoMock.Object);
     }
 
     [Fact]
@@ -103,5 +114,41 @@ public class TimesheetServiceTests
         // Assert
         await action.Should().ThrowAsync<DomainException>()
             .WithMessage("Hours logged (30) exceed the allowed maximum for this allocation (20.0 hrs).");
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenTimesheetAccessFrozen_ThrowsDomainException()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var dto = new SubmitTimesheetDto(10, today, 8, new List<string> { "Dev" });
+
+        _timesheetAccessServiceMock
+            .Setup(s => s.EnsureTimesheetAccessAsync(1, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new DomainException("Timesheet access is currently frozen. Please contact your reporting manager to restore access."));
+
+        Func<Task> action = async () => await _service.SubmitAsync(dto, 1, CancellationToken.None);
+
+        await action.Should().ThrowAsync<DomainException>()
+            .WithMessage("Timesheet access is currently frozen. Please contact your reporting manager to restore access.");
+
+        _configRepoMock.Verify(c => c.GetAsync(It.IsAny<CancellationToken>()), Times.Never);
+     }
+
+    [Fact]
+    public async Task SubmitAsync_ProjectNotFound_ThrowsEntityNotFoundException()
+    {
+        // Arrange
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var dto = new SubmitTimesheetDto(999, today, 8, new List<string> { "Dev" });
+
+        _projectRepoMock.Setup(p => p.GetByIdAsync(999, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Project?)null);
+
+        // Act
+        Func<Task> action = async () => await _service.SubmitAsync(dto, 1, CancellationToken.None);
+
+        // Assert
+        await action.Should().ThrowAsync<EntityNotFoundException>()
+            .WithMessage("Project not found.");
     }
 }

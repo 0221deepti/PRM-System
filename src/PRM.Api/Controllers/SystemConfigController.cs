@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PRM.Application.DTOs.Common;
 using PRM.Application.DTOs.Config;
 using PRM.Application.Interfaces.Services;
 
@@ -28,7 +29,7 @@ public class SystemConfigController : ControllerBase
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         var config = await _configService.GetConfigAsync(ct);
-        return Ok(config);
+        return Ok(new ApiResponse<SystemConfigDto>(true, "System configuration retrieved successfully.", config));
     }
 
     /// <summary>
@@ -43,6 +44,6 @@ public class SystemConfigController : ControllerBase
     public async Task<IActionResult> Update([FromBody] UpdateConfigDto dto, CancellationToken ct)
     {
         await _configService.UpdateConfigAsync(dto, ct);
-        return Ok(new { message = "Configuration updated." });
+        return Ok(new ApiResponse(true, "Configuration updated successfully."));
     }
 }

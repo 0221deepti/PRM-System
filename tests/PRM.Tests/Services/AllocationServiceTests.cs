@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using PRM.Application.DTOs.Allocation;
 using PRM.Application.Interfaces.Repositories;
+using PRM.Application.Interfaces.Services;
 using PRM.Application.Services;
 using PRM.Domain.Entities;
 using PRM.Domain.Enums;
@@ -14,6 +15,7 @@ public class AllocationServiceTests
     private readonly Mock<IAllocationRepository> _allocationRepoMock;
     private readonly Mock<IUserRepository> _userRepoMock;
     private readonly Mock<IProjectRepository> _projectRepoMock;
+    private readonly Mock<IEmailService> _emailServiceMock;
     private readonly AllocationService _service;
 
     public AllocationServiceTests()
@@ -21,19 +23,28 @@ public class AllocationServiceTests
         _allocationRepoMock = new Mock<IAllocationRepository>();
         _userRepoMock = new Mock<IUserRepository>();
         _projectRepoMock = new Mock<IProjectRepository>();
+        _emailServiceMock = new Mock<IEmailService>();
+
+        _emailServiceMock.Setup(x => x.SendTemplateEmailAsync(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<IReadOnlyDictionary<string, string>>(),
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PRM.Application.DTOs.Notification.EmailSendResultDto("test@gmail.com", true, null));
 
         _service = new AllocationService(
             _allocationRepoMock.Object,
             _userRepoMock.Object,
-            _projectRepoMock.Object);
+            _projectRepoMock.Object,
+            _emailServiceMock.Object);
     }
 
     [Fact]
     public async Task AllocateAsync_TotalExceeds100Percent_ThrowsOverAllocationException()
     {
         // Arrange
-        var user = new User { Id = 1, Status = EmployeeStatus.Bench };
-        var project = new Project { Id = 10, Status = ProjectStatus.Active };
+        var user = new User { Id = 1, Status = EmployeeStatus.Bench, ManagerId = 999 };
+        var project = new Project { Id = 10, Status = ProjectStatus.Active, ManagerId = 999, StartDate = new DateOnly(2025, 12, 1), EndDate = new DateOnly(2026, 12, 31) };
         var dto = new CreateAllocationDto(1, 10, 60, new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31));
 
         _userRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(user);
@@ -54,8 +65,8 @@ public class AllocationServiceTests
     public async Task AllocateAsync_ValidRequest_CreatesAllocation()
     {
         // Arrange
-        var user = new User { Id = 1, Status = EmployeeStatus.Bench };
-        var project = new Project { Id = 10, Status = ProjectStatus.Active };
+        var user = new User { Id = 1, Status = EmployeeStatus.Bench, ManagerId = 999 };
+        var project = new Project { Id = 10, Status = ProjectStatus.Active, ManagerId = 999, StartDate = new DateOnly(2025, 12, 1), EndDate = new DateOnly(2026, 12, 31) };
         var dto = new CreateAllocationDto(1, 10, 50, new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31));
 
         _userRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(user);
@@ -64,7 +75,7 @@ public class AllocationServiceTests
             .ReturnsAsync(new List<Allocation>());
 
         // Act
-        var result = await _service.AllocateAsync(dto, 999, CancellationToken.None);
+        var (result, warning) = await _service.AllocateAsync(dto, 999, CancellationToken.None);
 
         // Assert
         _allocationRepoMock.Verify(r => r.AddAsync(It.IsAny<Allocation>(), It.IsAny<CancellationToken>()), Times.Once);

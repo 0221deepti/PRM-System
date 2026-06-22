@@ -22,4 +22,5 @@ public class User : BaseEntity
     public ICollection<UserSkill> Skills { get; set; } = new List<UserSkill>();
     public ICollection<Allocation> Allocations { get; set; } = new List<Allocation>();
     public ICollection<Timesheet> Timesheets { get; set; } = new List<Timesheet>();
+    public ICollection<EmployeeAccessStatus> AccessStatuses { get; set; } = new List<EmployeeAccessStatus>();
 }

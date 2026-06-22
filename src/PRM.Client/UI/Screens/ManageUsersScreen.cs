@@ -26,7 +26,7 @@ public class ManageUsersScreen : Screen
         Console.WriteLine("3. Reactivate User");
         Console.WriteLine("0. Back");
 
-        var choice = InputHelper.ReadString("Select an option");
+        var choice = InputHelper.ReadMenuOption("Select an option", new[] { "1", "2", "3", "0" });
         try
         {
             switch (choice)
@@ -52,10 +52,6 @@ public class ManageUsersScreen : Screen
                     break;
                 case "0":
                     return false;
-                default:
-                    ConsoleRenderer.RenderError("Invalid option.");
-                    ConsoleRenderer.Pause();
-                    break;
             }
         }
         catch (Exception ex)
@@ -79,7 +75,7 @@ public class ManageUsersScreen : Screen
         Console.WriteLine("1. Admin");
         Console.WriteLine("2. Manager");
         Console.WriteLine("3. Employee");
-        var roleChoice = InputHelper.ReadString("Role (1-3)");
+        var roleChoice = InputHelper.ReadMenuOption("Role", new[] { "1", "2", "3" });
         var roleId = roleChoice switch
         {
             "1" => 1,

@@ -20,13 +20,25 @@ public class ProjectService : IProjectService
 
     public async Task<ProjectSummaryDto> CreateProjectAsync(CreateProjectDto dto, CancellationToken ct)
     {
+        var trimmedName = dto.Name.Trim();
+        var trimmedDesc = dto.Description?.Trim() ?? string.Empty;
+
         if (dto.StartDate >= dto.EndDate)
             throw new DomainException("Start date must be before end date.");
 
+        // Manager check
+        var manager = await _employees.GetByIdAsync(dto.ManagerId, ct)
+                      ?? throw new EntityNotFoundException("Manager employee not found.");
+
+        // Unique Name check
+        var allProjects = await _projects.GetAllAsync(ct);
+        if (allProjects.Any(p => p.Name.Trim().Equals(trimmedName, StringComparison.OrdinalIgnoreCase)))
+            throw new DomainException($"A project with the name '{trimmedName}' already exists.");
+
         var project = new Project
         {
-            Name = dto.Name,
-            Description = dto.Description,
+            Name = trimmedName,
+            Description = trimmedDesc,
             StartDate = dto.StartDate,
             EndDate = dto.EndDate,
             Status = dto.Status,
@@ -38,10 +50,9 @@ public class ProjectService : IProjectService
         await _projects.AddAsync(project, ct);
         await _projects.SaveChangesAsync(ct);
 
-        var manager = await _employees.GetWithSkillsAsync(dto.ManagerId, ct);
         return new ProjectSummaryDto(
             project.Id, project.Name,
-            manager?.FullName ?? "",
+            manager.FullName ?? "",
             project.EndDate, project.Status,
             project.HealthStatus, 0,
             project.TotalStoryPoints);
@@ -59,10 +70,17 @@ public class ProjectService : IProjectService
         return projects.Select(MapToSummary);
     }
 
-    public async Task<ProjectDetailDto?> GetProjectDetailAsync(int projectId, CancellationToken ct)
+    public async Task<ProjectDetailDto?> GetProjectDetailAsync(int projectId, int callerUserId, string callerRole, CancellationToken ct)
     {
         var project = await _projects.GetWithAllocationsAsync(projectId, ct);
         if (project == null) return null;
+
+        if (callerRole == "Manager" && project.ManagerId != callerUserId)
+            throw new DomainException("The selected project is not managed by you.");
+
+        if (callerRole == "Employee" && !project.Allocations.Any(a => a.UserId == callerUserId && a.IsActive))
+            throw new PrmUnauthorizedException("You are not allocated to this project.");
+
         return MapToDetail(project);
     }
 
@@ -71,8 +89,23 @@ public class ProjectService : IProjectService
         var project = await _projects.GetByIdAsync(projectId, ct)
                       ?? throw new EntityNotFoundException("Project not found.");
 
-        project.Name = dto.Name;
-        project.Description = dto.Description;
+        var trimmedName = dto.Name.Trim();
+        var trimmedDesc = dto.Description?.Trim() ?? string.Empty;
+
+        if (dto.StartDate >= dto.EndDate)
+            throw new DomainException("Start date must be before end date.");
+
+        // Manager check
+        _ = await _employees.GetByIdAsync(dto.ManagerId, ct)
+            ?? throw new EntityNotFoundException("Manager employee not found.");
+
+        // Unique Name check (excluding current project)
+        var allProjects = await _projects.GetAllAsync(ct);
+        if (allProjects.Any(p => p.Id != projectId && p.Name.Trim().Equals(trimmedName, StringComparison.OrdinalIgnoreCase)))
+            throw new DomainException($"A project with the name '{trimmedName}' already exists.");
+
+        project.Name = trimmedName;
+        project.Description = trimmedDesc;
         project.StartDate = dto.StartDate;
         project.EndDate = dto.EndDate;
         project.Status = dto.Status;
@@ -119,15 +152,21 @@ public class MilestoneService : IMilestoneService
 
     public MilestoneService(IProjectRepository projects) => _projects = projects;
 
-    public async Task<MilestoneSummaryDto> AddMilestoneAsync(int projectId, AddMilestoneDto dto, CancellationToken ct)
+    public async Task<MilestoneSummaryDto> AddMilestoneAsync(int projectId, AddMilestoneDto dto, int callerUserId, string callerRole, CancellationToken ct)
     {
         var project = await _projects.GetWithMilestonesAsync(projectId, ct)
                       ?? throw new EntityNotFoundException("Project not found.");
 
+        if (callerRole == "Manager" && project.ManagerId != callerUserId)
+            throw new DomainException("The selected project is not managed by you.");
+
+        if (dto.DueDate < project.StartDate || dto.DueDate > project.EndDate)
+            throw new DomainException($"Milestone Due Date ({dto.DueDate}) must fall within the project duration ({project.StartDate} to {project.EndDate}).");
+
         var milestone = new Milestone
         {
             ProjectId = projectId,
-            Title = dto.Title,
+            Title = dto.Title.Trim(),
             DueDate = dto.DueDate,
             StoryPoints = dto.StoryPoints,
             Status = MilestoneStatus.NotStarted
@@ -140,11 +179,14 @@ public class MilestoneService : IMilestoneService
         return new MilestoneSummaryDto(milestone.Id, milestone.Title, milestone.DueDate, milestone.StoryPoints, milestone.Status);
     }
 
-    public async Task UpdateMilestoneStatusAsync(int milestoneId, UpdateMilestoneStatusDto dto, CancellationToken ct)
+    public async Task UpdateMilestoneStatusAsync(int milestoneId, UpdateMilestoneStatusDto dto, int callerUserId, string callerRole, CancellationToken ct)
     {
         var projects = await _projects.GetAllWithDetailsAsync(ct);
         var project = projects.FirstOrDefault(p => p.Milestones.Any(m => m.Id == milestoneId))
                       ?? throw new EntityNotFoundException("Milestone not found.");
+
+        if (callerRole == "Manager" && project.ManagerId != callerUserId)
+            throw new DomainException("The selected project is not managed by you.");
 
         var milestone = project.Milestones.First(m => m.Id == milestoneId);
         milestone.Status = dto.Status;
@@ -152,10 +194,16 @@ public class MilestoneService : IMilestoneService
         await _projects.SaveChangesAsync(ct);
     }
 
-    public async Task<IEnumerable<MilestoneSummaryDto>> GetProjectMilestonesAsync(int projectId, CancellationToken ct)
+    public async Task<IEnumerable<MilestoneSummaryDto>> GetProjectMilestonesAsync(int projectId, int callerUserId, string callerRole, CancellationToken ct)
     {
-        var project = await _projects.GetWithMilestonesAsync(projectId, ct)
+        var project = await _projects.GetWithAllocationsAsync(projectId, ct)
                       ?? throw new EntityNotFoundException("Project not found.");
+
+        if (callerRole == "Manager" && project.ManagerId != callerUserId)
+            throw new DomainException("The selected project is not managed by you.");
+
+        if (callerRole == "Employee" && !project.Allocations.Any(a => a.UserId == callerUserId && a.IsActive))
+            throw new PrmUnauthorizedException("You are not allocated to this project.");
 
         return project.Milestones.Select(m =>
             new MilestoneSummaryDto(m.Id, m.Title, m.DueDate, m.StoryPoints, m.Status));

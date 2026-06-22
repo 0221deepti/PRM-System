@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using PRM.Application.DTOs.Employee;
 using PRM.Application.DTOs.User;
 using PRM.Application.Interfaces.Repositories;
@@ -15,39 +16,75 @@ public class UserService : IUserService
     private readonly IRepository<Role> _roles;
     private readonly IRepository<Skill> _skills;
     private readonly IRepository<UserSkill> _userSkills;
+    private readonly IConfiguration _config;
+    private readonly IEmailService _emailService;
 
     public UserService(
         IUserRepository users,
         IAllocationRepository allocations,
         IRepository<Role> roles,
         IRepository<Skill> skills,
-        IRepository<UserSkill> userSkills)
+        IRepository<UserSkill> userSkills,
+        IConfiguration config,
+        IEmailService emailService)
     {
         _users = users;
         _allocations = allocations;
         _roles = roles;
         _skills = skills;
         _userSkills = userSkills;
+        _config = config;
+        _emailService = emailService;
     }
 
-    public async Task<UserSummaryDto> CreateUserAsync(CreateUserDto dto, CancellationToken ct)
+    public async Task<(UserSummaryDto User, string? WarningMessage)> CreateUserAsync(CreateUserDto dto, CancellationToken ct)
     {
         ValidatePasswordStrength(dto.TemporaryPassword);
 
-        if (await _users.ExistsAsync(dto.Username, dto.Email, ct))
-            throw new DomainException("A user with this username or email already exists.");
+        var trimmedUsername = dto.Username.Trim();
+        var trimmedEmail = dto.Email.Trim();
+        var trimmedFullName = dto.FullName.Trim();
+        var trimmedDept = dto.Department?.Trim() ?? "Unassigned";
+
+        // Validate email domain config
+        var allowedDomainsList = _config.GetSection("AllowedEmailDomains").GetChildren().Select(c => c.Value).Where(v => v != null).ToArray();
+        var allowedDomains = allowedDomainsList.Length > 0
+            ? allowedDomainsList.Cast<string>().ToArray()
+            : new[] { "gmail.com", "example.com", "prm.local" };
+        var emailParts = trimmedEmail.Split('@');
+        if (emailParts.Length == 2)
+        {
+            var domain = emailParts[1].Trim().ToLowerInvariant();
+            if (!allowedDomains.Any(d => d.Trim().ToLowerInvariant() == domain || d.Trim().ToLowerInvariant() == $"@{domain}"))
+            {
+                throw new DomainException($"Email domain '@{domain}' is not allowed.");
+            }
+        }
+        else
+        {
+            throw new DomainException("Invalid email format.");
+        }
+
+        // Distinct uniqueness checks
+        var existingUser = await _users.GetByUsernameAsync(trimmedUsername, ct);
+        if (existingUser != null)
+            throw new DomainException($"Username '{trimmedUsername}' is already taken.");
+
+        var existingEmail = await _users.GetByEmailAsync(trimmedEmail, ct);
+        if (existingEmail != null)
+            throw new DomainException($"Email '{trimmedEmail}' is already registered.");
 
         var role = await _roles.GetByIdAsync(dto.RoleId, ct)
                    ?? throw new EntityNotFoundException("Role not found.");
 
         var user = new User
         {
-            FullName = dto.FullName,
-            Email = dto.Email,
-            Username = dto.Username,
+            FullName = trimmedFullName,
+            Email = trimmedEmail,
+            Username = trimmedUsername,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.TemporaryPassword),
             RoleId = dto.RoleId,
-            Department = dto.Department ?? "Unassigned",
+            Department = trimmedDept,
             Status = EmployeeStatus.Bench,
             IsActive = true,
             ForcePasswordChange = true
@@ -56,7 +93,28 @@ public class UserService : IUserService
         await _users.AddAsync(user, ct);
         await _users.SaveChangesAsync(ct);
 
-        return MapToDto(user, role);
+        string? warningMessage = null;
+        try
+        {
+            var placeholders = new Dictionary<string, string>
+            {
+                ["EmployeeName"] = user.FullName,
+                ["Username"] = user.Username,
+                ["Email"] = user.Email,
+                ["TemporaryPassword"] = dto.TemporaryPassword
+            };
+            var emailResult = await _emailService.SendTemplateEmailAsync("Welcome New User", user.Email, placeholders, ct);
+            if (!emailResult.IsSuccess)
+            {
+                warningMessage = "Unable to send notification email. The requested operation completed successfully, but email delivery failed.";
+            }
+        }
+        catch (Exception)
+        {
+            warningMessage = "Unable to send notification email. The requested operation completed successfully, but email delivery failed.";
+        }
+
+        return (MapToDto(user, role), warningMessage);
     }
 
     public async Task<IEnumerable<UserSummaryDto>> GetAllUsersAsync(CancellationToken ct)

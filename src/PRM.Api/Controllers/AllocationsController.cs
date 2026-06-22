@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PRM.Application.DTOs.Allocation;
+using PRM.Application.DTOs.Common;
 using PRM.Application.Interfaces.Services;
 
 namespace PRM.Api.Controllers;
@@ -30,7 +31,7 @@ public class AllocationsController : ControllerBase
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
         var allocations = await _service.GetAllAllocationsAsync(ct);
-        return Ok(allocations);
+        return Ok(new ApiResponse<IEnumerable<AllocationSummaryDto>>(true, "All allocations retrieved successfully.", allocations));
     }
 
     /// <summary>
@@ -45,7 +46,7 @@ public class AllocationsController : ControllerBase
     {
         var empId = GetCallerEmployeeId();
         var allocations = await _service.GetMyAllocationsAsync(empId, ct);
-        return Ok(allocations);
+        return Ok(new ApiResponse<IEnumerable<AllocationSummaryDto>>(true, "My allocations retrieved successfully.", allocations));
     }
 
     /// <summary>
@@ -60,8 +61,10 @@ public class AllocationsController : ControllerBase
     [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> GetByProject(int projectId, CancellationToken ct)
     {
-        var allocations = await _service.GetActiveAllocationsByProjectAsync(projectId, ct);
-        return Ok(allocations);
+        var callerId = GetCallerEmployeeId();
+        var callerRole = User.FindFirstValue(ClaimTypes.Role) ?? "";
+        var allocations = await _service.GetActiveAllocationsByProjectAsync(projectId, callerId, callerRole, ct);
+        return Ok(new ApiResponse<IEnumerable<AllocationSummaryDto>>(true, "Project allocations retrieved successfully.", allocations));
     }
 
     /// <summary>
@@ -78,8 +81,9 @@ public class AllocationsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateAllocationDto dto, CancellationToken ct)
     {
         var managerEmployeeId = GetCallerEmployeeId();
-        var result = await _service.AllocateAsync(dto, managerEmployeeId, ct);
-        return Ok(result);
+        var (result, warning) = await _service.AllocateAsync(dto, managerEmployeeId, ct);
+        var msg = warning ?? "Allocation created successfully.";
+        return Ok(new ApiResponse<AllocationSummaryDto>(true, msg, result));
     }
 
     /// <summary>
@@ -96,7 +100,7 @@ public class AllocationsController : ControllerBase
     {
         var managerEmployeeId = GetCallerEmployeeId();
         await _service.EndAllocationAsync(id, managerEmployeeId, ct);
-        return Ok(new { message = "Allocation ended." });
+        return Ok(new ApiResponse(true, "Allocation ended successfully."));
     }
 
     private int GetCallerEmployeeId()

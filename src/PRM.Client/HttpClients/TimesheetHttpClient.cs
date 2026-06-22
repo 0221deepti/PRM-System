@@ -22,8 +22,8 @@ public class TimesheetHttpClient : ApiClient
 
     public async Task<List<TeamTimesheetEntryDto>> GetTeamAsync(DateOnly weekStart)
     {
-        var dateStr = weekStart.ToString("dd-MM-yyyy");
-        var response = await _http.GetAsync($"api/timesheets/team?week={dateStr}");
+        var dateStr = weekStart.ToString("yyyy-MM-dd");
+        var response = await _http.GetAsync($"api/timesheets/team?weekStart={dateStr}");
         return await ReadAsync<List<TeamTimesheetEntryDto>>(response);
     }
 

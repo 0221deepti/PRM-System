@@ -28,52 +28,56 @@ class Program
 
         while (true)
         {
-            if (!session.IsLoggedIn)
+            try
             {
-                var login = new LoginScreen(services);
-                await login.RenderAsync();
-            }
-            else
-            {
-                // Main Menu Dispatcher
-                ConsoleRenderer.Clear();
-                ConsoleRenderer.RenderHeader("Main Menu");
-                Console.WriteLine($"Logged in as: {session.UserFullName} [{session.Role}]");
-                Console.WriteLine(new string('-', 50));
-                
-                Console.WriteLine("1. Go to Role Dashboard");
-                Console.WriteLine("2. Change Password");
-                Console.WriteLine("3. Logout");
-                Console.WriteLine("0. Exit Application");
-                
-                var choice = InputHelper.ReadString("Select an option");
-                switch (choice)
+                if (!session.IsLoggedIn)
                 {
-                    case "1":
-                        Screen dashboard = session.Role switch
-                        {
-                            Domain.Enums.UserRole.Admin => new AdminMenuScreen(services),
-                            Domain.Enums.UserRole.Manager => new ManagerMenuScreen(services),
-                            Domain.Enums.UserRole.Employee => new EmployeeMenuScreen(services),
-                            _ => throw new NotImplementedException()
-                        };
-                        
-                        bool stayOnDashboard;
-                        do { stayOnDashboard = await dashboard.RenderAsync(); } while (stayOnDashboard);
-                        break;
-                    case "2":
-                        await new ChangePasswordScreen(services).RenderAsync();
-                        break;
-                    case "3":
-                        session.Clear();
-                        break;
-                    case "0":
-                        return;
-                    default:
-                        ConsoleRenderer.RenderError("Invalid option.");
-                        ConsoleRenderer.Pause();
-                        break;
+                    var login = new LoginScreen(services);
+                    await login.RenderAsync();
                 }
+                else
+                {
+                    // Main Menu Dispatcher
+                    ConsoleRenderer.Clear();
+                    ConsoleRenderer.RenderHeader("Main Menu");
+                    Console.WriteLine($"Logged in as: {session.UserFullName} [{session.Role}]");
+                    Console.WriteLine(new string('-', 50));
+                    
+                    Console.WriteLine("1. Go to Role Dashboard");
+                    Console.WriteLine("2. Change Password");
+                    Console.WriteLine("3. Logout");
+                    Console.WriteLine("0. Exit Application");
+                    
+                    var choice = InputHelper.ReadMenuOption("Select an option", new[] { "1", "2", "3", "0" });
+                    switch (choice)
+                    {
+                        case "1":
+                            Screen dashboard = session.Role switch
+                            {
+                                Domain.Enums.UserRole.Admin => new AdminMenuScreen(services),
+                                Domain.Enums.UserRole.Manager => new ManagerMenuScreen(services),
+                                Domain.Enums.UserRole.Employee => new EmployeeMenuScreen(services),
+                                _ => throw new NotImplementedException()
+                            };
+                            
+                            bool stayOnDashboard;
+                            do { stayOnDashboard = await dashboard.RenderAsync(); } while (stayOnDashboard);
+                            break;
+                        case "2":
+                            await new ChangePasswordScreen(services).RenderAsync();
+                            break;
+                        case "3":
+                            session.Clear();
+                            break;
+                        case "0":
+                            return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleRenderer.RenderError($"An error occurred: {ex.Message}");
+                ConsoleRenderer.Pause();
             }
         }
     }

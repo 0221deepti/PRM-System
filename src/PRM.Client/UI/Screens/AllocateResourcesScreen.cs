@@ -13,7 +13,7 @@ public class AllocateResourcesScreen : Screen
 
         var empId = InputHelper.ReadInt("Employee Id");
         var projectId = InputHelper.ReadInt("Project Id");
-        var util = InputHelper.ReadInt("Utilisation Percent");
+        var util = InputHelper.ReadPercentage("Utilisation Percent");
         var from = InputHelper.ReadDate("From Date");
         var to = InputHelper.ReadDate("To Date");
 

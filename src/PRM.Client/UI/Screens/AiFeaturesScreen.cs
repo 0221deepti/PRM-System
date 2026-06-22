@@ -15,7 +15,7 @@ public class AiFeaturesScreen : Screen
         Console.WriteLine("3. AI-Assisted Team Builder");
         Console.WriteLine("0. Back");
 
-        var choice = InputHelper.ReadString("Select an option");
+        var choice = InputHelper.ReadMenuOption("Select an option", new[] { "1", "2", "3", "0" });
         try
         {
             switch (choice)
@@ -93,10 +93,6 @@ public class AiFeaturesScreen : Screen
                     break;
                 case "0":
                     return false;
-                default:
-                    ConsoleRenderer.RenderError("Invalid option.");
-                    ConsoleRenderer.Pause();
-                    break;
             }
         }
         catch (Exception ex)

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PRM.Application.DTOs.Common;
 using PRM.Application.DTOs.Project;
 using PRM.Application.Interfaces.Services;
 
@@ -37,7 +38,7 @@ public class ProjectsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateProjectDto dto, CancellationToken ct)
     {
         var result = await _projectService.CreateProjectAsync(dto, ct);
-        return CreatedAtAction(nameof(GetDetail), new { id = result.Id }, result);
+        return CreatedAtAction(nameof(GetDetail), new { id = result.Id }, new ApiResponse<ProjectSummaryDto>(true, "Project created successfully.", result));
     }
 
     /// <summary>
@@ -54,14 +55,14 @@ public class ProjectsController : ControllerBase
         {
             var managerEmpId = GetCallerEmployeeId();
             var mine = await _projectService.GetManagerProjectsAsync(managerEmpId, ct);
-            return Ok(mine);
+            return Ok(new ApiResponse<IEnumerable<ProjectSummaryDto>>(true, "Manager projects retrieved successfully.", mine));
         }
 
         if (!User.IsInRole("Admin"))
-            return Forbid();
+            return StatusCode(403, new ApiResponse(false, "Forbidden - Admin role required."));
 
         var all = await _projectService.GetAllProjectsAsync(ct);
-        return Ok(all);
+        return Ok(new ApiResponse<IEnumerable<ProjectSummaryDto>>(true, "All projects retrieved successfully.", all));
     }
 
     /// <summary>
@@ -74,9 +75,11 @@ public class ProjectsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetDetail(int id, CancellationToken ct)
     {
-        var project = await _projectService.GetProjectDetailAsync(id, ct);
-        if (project == null) return NotFound();
-        return Ok(project);
+        var callerId = GetCallerEmployeeId();
+        var callerRole = User.FindFirstValue(ClaimTypes.Role) ?? "";
+        var project = await _projectService.GetProjectDetailAsync(id, callerId, callerRole, ct);
+        if (project == null) return NotFound(new ApiResponse(false, "Project not found."));
+        return Ok(new ApiResponse<ProjectDetailDto>(true, "Project details retrieved successfully.", project));
     }
 
     /// <summary>
@@ -93,7 +96,7 @@ public class ProjectsController : ControllerBase
     public async Task<IActionResult> Update(int id, [FromBody] UpdateProjectDto dto, CancellationToken ct)
     {
         await _projectService.UpdateProjectAsync(id, dto, ct);
-        return Ok(new { message = "Project updated." });
+        return Ok(new ApiResponse(true, "Project updated successfully."));
     }
 
     /// <summary>
@@ -109,8 +112,10 @@ public class ProjectsController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AddMilestone(int id, [FromBody] AddMilestoneDto dto, CancellationToken ct)
     {
-        var result = await _milestoneService.AddMilestoneAsync(id, dto, ct);
-        return Ok(result);
+        var callerId = GetCallerEmployeeId();
+        var callerRole = User.FindFirstValue(ClaimTypes.Role) ?? "";
+        var result = await _milestoneService.AddMilestoneAsync(id, dto, callerId, callerRole, ct);
+        return Ok(new ApiResponse<MilestoneSummaryDto>(true, "Milestone added successfully.", result));
     }
 
     /// <summary>
@@ -127,8 +132,10 @@ public class ProjectsController : ControllerBase
     [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> UpdateMilestoneStatus(int projectId, int milestoneId, [FromBody] UpdateMilestoneStatusDto dto, CancellationToken ct)
     {
-        await _milestoneService.UpdateMilestoneStatusAsync(milestoneId, dto, ct);
-        return Ok(new { message = "Milestone updated." });
+        var callerId = GetCallerEmployeeId();
+        var callerRole = User.FindFirstValue(ClaimTypes.Role) ?? "";
+        await _milestoneService.UpdateMilestoneStatusAsync(milestoneId, dto, callerId, callerRole, ct);
+        return Ok(new ApiResponse(true, "Milestone status updated successfully."));
     }
 
     /// <summary>
@@ -141,8 +148,10 @@ public class ProjectsController : ControllerBase
     [HttpGet("{id:int}/milestones")]
     public async Task<IActionResult> GetMilestones(int id, CancellationToken ct)
     {
-        var milestones = await _milestoneService.GetProjectMilestonesAsync(id, ct);
-        return Ok(milestones);
+        var callerId = GetCallerEmployeeId();
+        var callerRole = User.FindFirstValue(ClaimTypes.Role) ?? "";
+        var milestones = await _milestoneService.GetProjectMilestonesAsync(id, callerId, callerRole, ct);
+        return Ok(new ApiResponse<IEnumerable<MilestoneSummaryDto>>(true, "Milestones retrieved successfully.", milestones));
     }
 
     private int GetCallerEmployeeId()

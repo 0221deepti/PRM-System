@@ -18,7 +18,7 @@ public class AdminMenuScreen : Screen
         Console.WriteLine("5. System Configuration");
         Console.WriteLine("0. Back to Main Menu");
 
-        var choice = InputHelper.ReadString("Select an option");
+        var choice = InputHelper.ReadMenuOption("Select an option", new[] { "1", "2", "3", "4", "5", "0" });
 
         switch (choice)
         {
@@ -39,10 +39,6 @@ public class AdminMenuScreen : Screen
                 break;
             case "0":
                 return false; // go back
-            default:
-                ConsoleRenderer.RenderError("Invalid option.");
-                ConsoleRenderer.Pause();
-                break;
         }
 
         return true; // stay on admin menu

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PRM.Application.DTOs.Common;
 using PRM.Application.DTOs.User;
 using PRM.Application.Interfaces.Services;
 
@@ -29,8 +30,10 @@ public class UsersController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto, CancellationToken ct)
     {
-        var result = await _userService.CreateUserAsync(dto, ct);
-        return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+        var (user, warning) = await _userService.CreateUserAsync(dto, ct);
+        var msg = warning ?? "User created successfully.";
+        var response = new ApiResponse<UserSummaryDto>(true, msg, user);
+        return CreatedAtAction(nameof(GetById), new { id = user.Id }, response);
     }
 
     /// <summary>
@@ -43,7 +46,7 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
         var users = await _userService.GetAllUsersAsync(ct);
-        return Ok(users);
+        return Ok(new ApiResponse<IEnumerable<UserSummaryDto>>(true, "Users retrieved successfully.", users));
     }
 
     /// <summary>
@@ -58,8 +61,8 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> GetById(int id, CancellationToken ct)
     {
         var user = await _userService.GetByIdAsync(id, ct);
-        if (user == null) return NotFound();
-        return Ok(user);
+        if (user == null) return NotFound(new ApiResponse(false, "User not found."));
+        return Ok(new ApiResponse<UserSummaryDto>(true, "User retrieved successfully.", user));
     }
 
     /// <summary>
@@ -74,7 +77,7 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> Deactivate(int id, CancellationToken ct)
     {
         await _userService.DeactivateUserAsync(id, ct);
-        return Ok(new { message = "User deactivated." });
+        return Ok(new ApiResponse(true, "User deactivated."));
     }
 
     /// <summary>
@@ -89,6 +92,6 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> Reactivate(int id, CancellationToken ct)
     {
         await _userService.ReactivateUserAsync(id, ct);
-        return Ok(new { message = "Account reactivated." });
+        return Ok(new ApiResponse(true, "Account reactivated."));
     }
 }

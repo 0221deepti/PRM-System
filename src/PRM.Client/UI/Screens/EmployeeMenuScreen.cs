@@ -17,7 +17,7 @@ public class EmployeeMenuScreen : Screen
         Console.WriteLine("4. View My Timesheets");
         Console.WriteLine("0. Back to Main Menu");
 
-        var choice = InputHelper.ReadString("Select an option");
+        var choice = InputHelper.ReadMenuOption("Select an option", new[] { "1", "2", "3", "4", "0" });
 
         switch (choice)
         {
@@ -35,10 +35,6 @@ public class EmployeeMenuScreen : Screen
                 break;
             case "0":
                 return false;
-            default:
-                ConsoleRenderer.RenderError("Invalid option.");
-                ConsoleRenderer.Pause();
-                break;
         }
 
         return true;

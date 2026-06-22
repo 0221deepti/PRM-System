@@ -14,6 +14,7 @@ public class AuthServiceTests
     private readonly Mock<IUserRepository> _userRepoMock;
     private readonly Mock<IEmployeeRepository> _employeeRepoMock;
     private readonly Mock<ITokenService> _tokenServiceMock;
+    private readonly Mock<IEmailService> _emailServiceMock;
     private readonly AuthService _authService;
 
     public AuthServiceTests()
@@ -21,11 +22,20 @@ public class AuthServiceTests
         _userRepoMock = new Mock<IUserRepository>();
         _employeeRepoMock = new Mock<IEmployeeRepository>();
         _tokenServiceMock = new Mock<ITokenService>();
+        _emailServiceMock = new Mock<IEmailService>();
+
+        _emailServiceMock.Setup(x => x.SendTemplateEmailAsync(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<IReadOnlyDictionary<string, string>>(),
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PRM.Application.DTOs.Notification.EmailSendResultDto("test@gmail.com", true, null));
 
         _authService = new AuthService(
             _userRepoMock.Object,
             _employeeRepoMock.Object,
-            _tokenServiceMock.Object);
+            _tokenServiceMock.Object,
+            _emailServiceMock.Object);
     }
 
     [Fact]

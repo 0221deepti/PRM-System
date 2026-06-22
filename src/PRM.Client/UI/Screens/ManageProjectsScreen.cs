@@ -24,7 +24,7 @@ public class ManageProjectsScreen : Screen
         Console.WriteLine("2. View Project Details");
         Console.WriteLine("0. Back");
 
-        var choice = InputHelper.ReadString("Select an option");
+        var choice = InputHelper.ReadMenuOption("Select an option", new[] { "1", "2", "0" });
         try
         {
             switch (choice)
@@ -40,10 +40,6 @@ public class ManageProjectsScreen : Screen
                     break;
                 case "0":
                     return false;
-                default:
-                    ConsoleRenderer.RenderError("Invalid option.");
-                    ConsoleRenderer.Pause();
-                    break;
             }
         }
         catch (Exception ex)
@@ -63,8 +59,7 @@ public class ManageProjectsScreen : Screen
         var start = InputHelper.ReadDate("Start Date");
         var end = InputHelper.ReadDate("End Date");
         Console.WriteLine("Status: 1. Planned  2. Active  3. OnHold  4. Completed");
-        var st = InputHelper.ReadString("Status (1-4)");
-        var status = st == "2" ? ProjectStatus.Active : st == "3" ? ProjectStatus.OnHold : st == "4" ? ProjectStatus.Completed : ProjectStatus.Planned;
+        var status = InputHelper.ReadEnumSelection<ProjectStatus>("Status", 4);
         var managerId = InputHelper.ReadInt("Manager Employee Id");
         var points = InputHelper.ReadInt("Total Story Points");
 
