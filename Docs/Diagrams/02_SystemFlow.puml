@@ -1,0 +1,96 @@
+@startuml System_Flow_Diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam ArrowColor #333333
+skinparam ActorBkgColor #FFE6E6
+skinparam ParticipantBkgColor #E1F5FE
+skinparam ParticipantBorderColor #0277BD
+skinparam SequenceLifeLineBkgColor #E1F5FE
+skinparam NoteBackgroundColor #FFF9E6
+skinparam NoteBorderColor #FFA500
+
+title PRM System - System Flow Diagram
+
+actor "Client Application" as Client
+participant "PRM.Api\n(Controllers)" as API
+participant "PRM.Application\n(Services)" as Service
+participant "PRM.Infrastructure\n(Repositories)" as Repo
+database "SQLite\nDatabase" as DB
+participant "Infrastructure\n(Auth/AI)" as Infra
+
+note over Client
+PRM Console Client
+end note
+
+== Authentication Flow ==
+Client -> API: POST /api/auth/login
+API -> Service: AuthService.LoginAsync()
+Service -> Repo: IUserRepository.GetByUsernameAsync()
+Repo -> DB: SELECT User WHERE Username=?
+DB --> Repo: User record
+Repo --> Service: User entity
+Service -> Service: Verify Password (BCrypt)
+Service -> Infra: ITokenService.GenerateToken()
+Infra --> Service: JWT Token
+Service --> API: LoginResponseDto
+API --> Client: Token + User Info
+
+== Resource Management Flow ==
+Client -> API: GET /api/projects
+API -> Service: ProjectService.GetAllProjectsAsync()
+Service -> Repo: IProjectRepository.GetAllAsync()
+Repo -> DB: SELECT * FROM Projects
+DB --> Repo: Project records
+Repo --> Service: Project entities
+Service --> API: ProjectDto collection
+API --> Client: JSON response
+
+== Project & Team Allocation Flow ==
+Client -> API: POST /api/allocations
+API -> Service: AllocationService.CreateAllocationAsync()
+Service -> Repo: IEmployeeRepository.GetByIdAsync()
+Repo -> DB: SELECT Employee WHERE Id=?
+DB --> Repo: Employee record
+Repo --> Service: Employee entity
+Service -> Repo: IProjectRepository.GetByIdAsync()
+Repo -> DB: SELECT Project WHERE Id=?
+DB --> Repo: Project record
+Repo --> Service: Project entity
+Service -> Repo: IAllocationRepository.CreateAsync()
+Repo -> DB: INSERT INTO Allocations
+DB --> Repo: Confirmation
+Repo --> Service: Allocation entity
+Service --> API: AllocationResponseDto
+API --> Client: Created allocation
+
+== Timesheet Submission Flow ==
+Client -> API: POST /api/timesheets
+API -> Service: TimesheetService.SubmitTimesheetAsync()
+Service -> Service: Validate Hours (≤ MaxWeeklyHours)
+Service -> Repo: ITimesheetRepository.CreateAsync()
+Repo -> DB: INSERT INTO Timesheets
+DB --> Repo: Confirmation
+Repo --> Service: Timesheet entity
+Service -> Infra: Trigger AI Analysis (optional)
+Infra --> Service: Analysis results
+Service --> API: TimesheetResponseDto
+API --> Client: Timesheet submitted
+
+== Configuration & AI Integration ==
+Client -> API: GET /api/config
+API -> Service: SystemConfigService.GetConfigAsync()
+Service -> Repo: ISystemConfigRepository.GetConfigAsync()
+Repo -> DB: SELECT SystemConfig
+DB --> Repo: Config record
+Repo --> Service: SystemConfig entity
+Service --> API: ConfigResponseDto
+API --> Client: System config
+
+note over Infra
+- JWT Token Service
+- Password Hashing (BCrypt)
+- AI Provider Integration (Gemini)
+- Scheduler Service (Background Jobs)
+end note
+
+@enduml

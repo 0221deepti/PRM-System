@@ -1,0 +1,193 @@
+@startuml Entity_Relationship_Diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam ClassBkgColor #FCE8E8
+skinparam ClassBorderColor #C40000
+skinparam ClassFontColor #000000
+skinparam ArrowColor #333333
+
+title PRM System - Entity Relationship Diagram (ERD)
+
+entity "User" as user {
+    *Id : int <<PK>>
+    --
+    FullName : string
+    Email : string
+    Username : string
+    PasswordHash : string
+    Role : UserRole (enum)
+    IsActive : bool
+    ForcePasswordChange : bool
+    CreatedAt : datetime
+    UpdatedAt : datetime
+}
+
+entity "Employee" as employee {
+    *Id : int <<PK>>
+    --
+    UserId : int <<FK>>
+    Department : string
+    Status : EmployeeStatus (enum)
+    ManagerId : int <<FK>> (nullable)
+    CreatedAt : datetime
+    UpdatedAt : datetime
+}
+
+entity "Skill" as skill {
+    *Id : int <<PK>>
+    --
+    Name : string
+    Category : SkillCategory (enum)
+    CreatedAt : datetime
+    UpdatedAt : datetime
+}
+
+entity "EmployeeSkill" as employeeSkill {
+    *Id : int <<PK>>
+    --
+    EmployeeId : int <<FK>>
+    SkillId : int <<FK>>
+    Proficiency : SkillProficiency (enum)
+    CreatedAt : datetime
+    UpdatedAt : datetime
+}
+
+entity "Project" as project {
+    *Id : int <<PK>>
+    --
+    Name : string
+    Description : string
+    StartDate : date
+    EndDate : date
+    Status : ProjectStatus (enum)
+    ManagerId : int <<FK>>
+    TotalStoryPoints : int
+    HealthStatus : ProjectHealthStatus (enum)
+    CreatedAt : datetime
+    UpdatedAt : datetime
+}
+
+entity "Milestone" as milestone {
+    *Id : int <<PK>>
+    --
+    ProjectId : int <<FK>>
+    Title : string
+    DueDate : date
+    StoryPoints : int
+    Status : MilestoneStatus (enum)
+    CreatedAt : datetime
+    UpdatedAt : datetime
+}
+
+entity "Allocation" as allocation {
+    *Id : int <<PK>>
+    --
+    EmployeeId : int <<FK>>
+    ProjectId : int <<FK>>
+    UtilisationPercent : int (0-100)
+    FromDate : date
+    ToDate : date
+    IsActive : bool
+    CreatedAt : datetime
+    UpdatedAt : datetime
+}
+
+entity "Timesheet" as timesheet {
+    *Id : int <<PK>>
+    --
+    EmployeeId : int <<FK>>
+    ProjectId : int <<FK>>
+    WeekStartDate : date
+    HoursWorked : decimal
+    ActivityTags : string (comma-separated)
+    CreatedAt : datetime
+    UpdatedAt : datetime
+}
+
+entity "SystemConfig" as systemConfig {
+    *Id : int <<PK>>
+    --
+    LlmProvider : string
+    LlmApiKey : string
+    SchedulerIntervalHours : int
+    MaxWeeklyHours : int
+    CreatedAt : datetime
+    UpdatedAt : datetime
+}
+
+user ||--o{ employee : "has (1:0..1)"
+employee }o--|| employee : "manages (self-ref)"
+employee ||--o{ employeeSkill : "has skills (1:0..*)"
+skill ||--o{ employeeSkill : "used by (1:0..*)"
+employee ||--o{ allocation : "allocated to (1:0..*)"
+employee ||--o{ timesheet : "submits (1:0..*)"
+project }o--|| employee : "managed by (1:1)"
+project ||--o{ milestone : "contains (1:0..*)"
+project ||--o{ allocation : "has (1:0..*)"
+project ||--o{ timesheet : "tracked by (1:0..*)"
+allocation }o--|| employee : "(*..*)"
+allocation }o--|| project : "(*..*)"
+timesheet }o--|| employee : "(*..*)"
+timesheet }o--|| project : "(*..*)"
+milestone }o--|| project : "(*..*)"
+
+note right of user
+  Represents system users
+  with authentication credentials
+  and role-based access control.
+  One User can have one Employee.
+end note
+
+note right of employee
+  Represents employees in the system.
+  Each employee has a User account.
+  Can have a Manager (self-reference).
+  Tracks department and status.
+end note
+
+note right of skill
+  Represents skills that employees
+  can possess with proficiency levels.
+  Categorized as Technical,
+  Business, or Soft.
+end note
+
+note right of employeeSkill
+  Junction table (bridge entity)
+  linking employees to their
+  skills with proficiency levels.
+  Implements Many-to-Many relationship.
+end note
+
+note right of project
+  Represents projects managed by employees.
+  Tracks timeline, status, story points,
+  and health status (OnTrack, AtRisk, OffTrack).
+end note
+
+note right of milestone
+  Represents project milestones
+  with due dates, story points,
+  and completion status.
+end note
+
+note right of allocation
+  Represents employee allocation to projects.
+  Tracks utilization percentage (0-100),
+  allocation period, and active status.
+  Many-to-Many with constraints.
+end note
+
+note right of timesheet
+  Records weekly hours worked by employees
+  on specific projects with activity tags.
+  Used for tracking utilization and reporting.
+end note
+
+note right of systemConfig
+  Stores system configuration including
+  LLM provider details, scheduler settings,
+  and maximum weekly hours policy.
+end note
+
+@enduml

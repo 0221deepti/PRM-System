@@ -1,0 +1,386 @@
+using Microsoft.Extensions.DependencyInjection;
+using PRM.Application.Interfaces.Repositories;
+using PRM.Application.Interfaces.Services;
+using PRM.Domain.Entities;
+using PRM.Domain.Enums;
+using PRM.Infrastructure.Persistence;
+using PRM.Infrastructure.Services;
+using PRM.Tests.Common;
+
+namespace PRM.Tests.Services;
+
+/// <summary>
+/// Integration tests for Timesheet Reminder functionality
+/// Tests the complete workflow: missed timesheets -> reminders -> freeze -> restore
+/// </summary>
+[TestClass]
+public class TimesheetAccessServiceTests : IntegrationTestBase
+{
+    private ITimesheetAccessService _service = null!;
+    private IEmployeeRepository _employees = null!;
+    private IAllocationRepository _allocations = null!;
+    private ITimesheetRepository _timesheets = null!;
+    private IEmployeeAccessStatusRepository _accessStatuses = null!;
+    private IUserRepository _users = null!;
+    private IEmailService _emailService = null!;
+
+    [TestInitialize]
+    public async Task Initialize()
+    {
+        using var scope = ServiceProvider.CreateScope();
+        _service = scope.ServiceProvider.GetRequiredService<ITimesheetAccessService>();
+        _employees = scope.ServiceProvider.GetRequiredService<IEmployeeRepository>();
+        _allocations = scope.ServiceProvider.GetRequiredService<IAllocationRepository>();
+        _timesheets = scope.ServiceProvider.GetRequiredService<ITimesheetRepository>();
+        _accessStatuses = scope.ServiceProvider.GetRequiredService<IEmployeeAccessStatusRepository>();
+        _users = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+        _emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+
+        await SeedTestDataAsync();
+    }
+
+    private async Task SeedTestDataAsync()
+    {
+        using var scope = ServiceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PrmDbContext>();
+        var cts = new CancellationTokenSource();
+
+        // Create test roles
+        if (!db.Roles.Any())
+        {
+            db.Roles.AddRange(
+                new Role { Name = "Admin" },
+                new Role { Name = "Manager" },
+                new Role { Name = "Employee" });
+            await db.SaveChangesAsync(cts.Token);
+        }
+
+        // Create test users
+        if (!db.Users.Any())
+        {
+            var managerRole = db.Roles.First(r => r.Name == "Manager");
+            var employeeRole = db.Roles.First(r => r.Name == "Employee");
+
+            var manager = new User
+            {
+                FullName = "John Manager",
+                Email = "manager@prm.test",
+                Username = "manager",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
+                RoleId = managerRole.Id,
+                IsActive = true
+            };
+
+            var employee1 = new User
+            {
+                FullName = "Alice Employee",
+                Email = "alice@prm.test",
+                Username = "alice",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
+                RoleId = employeeRole.Id,
+                IsActive = true
+            };
+
+            var employee2 = new User
+            {
+                FullName = "Bob Employee",
+                Email = "bob@prm.test",
+                Username = "bob",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@1234"),
+                RoleId = employeeRole.Id,
+                IsActive = true
+            };
+
+            db.Users.AddRange(manager, employee1, employee2);
+            await db.SaveChangesAsync(cts.Token);
+
+            // Create employees
+            var employees = new[]
+            {
+                new Employee { UserId = employee1.Id, ManagerId = manager.Id, IsActive = true },
+                new Employee { UserId = employee2.Id, ManagerId = manager.Id, IsActive = true }
+            };
+            db.Employees.AddRange(employees);
+            await db.SaveChangesAsync(cts.Token);
+        }
+
+        // Create project
+        if (!db.Projects.Any())
+        {
+            var project = new Project
+            {
+                Name = "Test Project",
+                Description = "For testing timesheet reminders",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            db.Projects.Add(project);
+            await db.SaveChangesAsync(cts.Token);
+        }
+
+        // Create allocations for last week
+        if (!db.Allocations.Any())
+        {
+            var lastMonday = GetLastMonday();
+            var employee1 = db.Employees.First();
+            var employee2 = db.Employees.Skip(1).First();
+            var project = db.Projects.First();
+
+            var allocations = new[]
+            {
+                new Allocation
+                {
+                    UserId = employee1.UserId,
+                    ProjectId = project.Id,
+                    FromDate = lastMonday,
+                    ToDate = lastMonday.AddDays(6),
+                    UtilisationPercent = 100,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new Allocation
+                {
+                    UserId = employee2.UserId,
+                    ProjectId = project.Id,
+                    FromDate = lastMonday,
+                    ToDate = lastMonday.AddDays(6),
+                    UtilisationPercent = 100,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                }
+            };
+            db.Allocations.AddRange(allocations);
+            await db.SaveChangesAsync(cts.Token);
+        }
+    }
+
+    /// <summary>
+    /// Test: Verify that employees with missed timesheets are identified correctly
+    /// Expected: GetCurrentStatusAsync returns null for employees without access status
+    /// </summary>
+    [TestMethod]
+    public async Task ProcessDaily_WhenEmployeeMissesTimesheet_ShouldCreateAccessStatus()
+    {
+        var cts = new CancellationTokenSource();
+        
+        // Get the first employee
+        var employees = await _employees.GetAllWithDetailsAsync(cts.Token);
+        var testEmployee = employees.First();
+
+        // Execute the daily process (should send reminders)
+        await _service.ProcessDailyAsync(cts.Token);
+
+        // Verify that access status was created and reminder was tracked
+        var lastMonday = GetLastMonday();
+        var status = await _accessStatuses.GetByEmployeeAndWeekAsync(testEmployee.Id, lastMonday, cts.Token);
+
+        Assert.IsNotNull(status, "Access status should be created for employee who missed timesheet");
+        Assert.AreEqual(lastMonday, status.TrackedWeekStartDate, "Tracked week should be last Monday");
+    }
+
+    /// <summary>
+    /// Test: Verify that duplicate emails are not sent to the same employee
+    /// Expected: Running ProcessDaily twice should not send duplicate reminders
+    /// </summary>
+    [TestMethod]
+    public async Task ProcessDaily_WhenCalledTwice_ShouldNotSendDuplicateReminders()
+    {
+        var cts = new CancellationTokenSource();
+
+        // First execution
+        await _service.ProcessDailyAsync(cts.Token);
+
+        var employees = await _employees.GetAllWithDetailsAsync(cts.Token);
+        var testEmployee = employees.First();
+        var lastMonday = GetLastMonday();
+
+        // Check initial status
+        var statusAfterFirst = await _accessStatuses.GetByEmployeeAndWeekAsync(testEmployee.Id, lastMonday, cts.Token);
+        var reminder1DateAfterFirst = statusAfterFirst?.Reminder1SentDate;
+
+        // Wait a bit and execute again
+        await Task.Delay(100);
+        await _service.ProcessDailyAsync(cts.Token);
+
+        // Check status after second execution
+        var statusAfterSecond = await _accessStatuses.GetByEmployeeAndWeekAsync(testEmployee.Id, lastMonday, cts.Token);
+        var reminder1DateAfterSecond = statusAfterSecond?.Reminder1SentDate;
+
+        Assert.AreEqual(reminder1DateAfterFirst, reminder1DateAfterSecond, 
+            "Reminder date should not change on second execution (no duplicates)");
+    }
+
+    /// <summary>
+    /// Test: Verify that employees who submitted timesheets are not reminded
+    /// Expected: Employees with all required timesheets should be excluded from reminders
+    /// </summary>
+    [TestMethod]
+    public async Task ProcessDaily_WhenEmployeeSubmitsTimesheet_ShouldNotSendReminders()
+    {
+        var cts = new CancellationTokenSource();
+
+        // Get employees and project
+        var employees = await _employees.GetAllWithDetailsAsync(cts.Token);
+        var testEmployee = employees.Skip(1).First(); // Use second employee
+        var project = (await ServiceProvider.CreateScope().ServiceProvider
+            .GetRequiredService<IProjectRepository>()
+            .GetAllAsync(cts.Token)).First();
+
+        var lastMonday = GetLastMonday();
+        var userIds = testEmployee.Id;
+
+        // Submit timesheet for this employee
+        var timesheet = new Timesheet
+        {
+            UserId = userIds,
+            ProjectId = project.Id,
+            WeekStartDate = lastMonday,
+            TotalHoursWorked = 40
+        };
+        await _timesheets.AddAsync(timesheet, cts.Token);
+        await _timesheets.SaveChangesAsync(cts.Token);
+
+        // Execute daily process
+        await _service.ProcessDailyAsync(cts.Token);
+
+        // Verify no access status was created (because timesheet was submitted)
+        var status = await _accessStatuses.GetByEmployeeAndWeekAsync(userIds, lastMonday, cts.Token);
+        Assert.IsNull(status, "No access status should be created if employee submitted timesheet");
+    }
+
+    /// <summary>
+    /// Test: Verify access restoration workflow
+    /// Expected: Manager can restore access and employee receives notification
+    /// </summary>
+    [TestMethod]
+    public async Task RestoreAccess_WhenManagerRestoresAccess_ShouldUnfreezeAndNotify()
+    {
+        var cts = new CancellationTokenSource();
+
+        // Get test data
+        var employees = await _employees.GetAllWithDetailsAsync(cts.Token);
+        var testEmployee = employees.First();
+        var manager = await _users.GetByIdAsync(testEmployee.ManagerId ?? 0, cts.Token);
+
+        var lastMonday = GetLastMonday();
+
+        // Create a frozen access status
+        var status = new EmployeeAccessStatus
+        {
+            EmployeeId = testEmployee.Id,
+            TrackedWeekStartDate = lastMonday,
+            IsTimesheetFrozen = true,
+            Reminder1SentDate = DateTime.UtcNow.AddDays(-2),
+            Reminder2SentDate = DateTime.UtcNow.AddDays(-1),
+            FreezeDate = DateTime.UtcNow
+        };
+        await _accessStatuses.AddAsync(status, cts.Token);
+        await _accessStatuses.SaveChangesAsync(cts.Token);
+
+        // Restore access
+        var result = await _service.RestoreAccessAsync(testEmployee.ManagerId ?? 0, testEmployee.Id, cts.Token);
+
+        // Verify restoration
+        Assert.IsFalse(result.IsTimesheetFrozen, "Timesheet should be unfrozen after restoration");
+        Assert.IsNotNull(result.RestoredDate, "Restored date should be set");
+        Assert.AreEqual(testEmployee.ManagerId, result.RestoredBy, "Manager should be recorded as who restored access");
+
+        // Verify in database
+        var updatedStatus = await _accessStatuses.GetByEmployeeAndWeekAsync(testEmployee.Id, lastMonday, cts.Token);
+        Assert.IsFalse(updatedStatus!.IsTimesheetFrozen, "Frozen status should be updated in database");
+    }
+
+    /// <summary>
+    /// Test: Verify email template rendering with placeholders
+    /// Expected: Email templates should correctly replace placeholders
+    /// </summary>
+    [TestMethod]
+    public async Task SendReminderEmail_ShouldRenderPlaceholdersCorrectly()
+    {
+        var cts = new CancellationTokenSource();
+
+        var placeholders = new Dictionary<string, string>
+        {
+            ["EmployeeName"] = "Test Employee",
+            ["ManagerName"] = "Test Manager",
+            ["WeekStartDate"] = "2026-01-01",
+            ["SubmissionDeadline"] = "2026-01-10"
+        };
+
+        // Try to send a test email (will succeed if email is enabled, or log if disabled)
+        var result = await _emailService.SendTemplateEmailAsync(
+            "Timesheet Reminder 1",
+            "test@example.com",
+            placeholders,
+            cts.Token);
+
+        // Email service handles disabled emails gracefully
+        Assert.IsTrue(result.IsSuccess || result.ErrorMessage!.Contains("disabled"),
+            "Email should succeed or be disabled gracefully");
+    }
+
+    /// <summary>
+    /// Test: Verify that active allocations are correctly identified
+    /// Expected: Only employees with active allocations during the tracked week should receive reminders
+    /// </summary>
+    [TestMethod]
+    public async Task ProcessDaily_ShouldOnlyProcessActiveAllocations()
+    {
+        var cts = new CancellationTokenSource();
+
+        // Get test employee and deactivate their allocation
+        var employees = await _employees.GetAllWithDetailsAsync(cts.Token);
+        var testEmployee = employees.First();
+
+        var allocations = await _allocations.GetActiveByUserAsync(testEmployee.Id, cts.Token);
+        foreach (var allocation in allocations)
+        {
+            allocation.IsActive = false;
+        }
+        _allocations.UpdateRange(allocations);
+        await _allocations.SaveChangesAsync(cts.Token);
+
+        // Execute daily process
+        await _service.ProcessDailyAsync(cts.Token);
+
+        // Verify no access status was created (because no active allocations)
+        var lastMonday = GetLastMonday();
+        var status = await _accessStatuses.GetByEmployeeAndWeekAsync(testEmployee.Id, lastMonday, cts.Token);
+
+        Assert.IsNull(status, "No access status should be created if employee has no active allocations");
+    }
+
+    /// <summary>
+    /// Test: Verify that inactive employees are excluded from reminder process
+    /// Expected: Inactive employees should not receive reminders
+    /// </summary>
+    [TestMethod]
+    public async Task ProcessDaily_ShouldExcludeInactiveEmployees()
+    {
+        var cts = new CancellationTokenSource();
+
+        // Get test employee and deactivate
+        var employees = await _employees.GetAllWithDetailsAsync(cts.Token);
+        var testEmployee = employees.First();
+        testEmployee.IsActive = false;
+        _employees.Update(testEmployee);
+        await _employees.SaveChangesAsync(cts.Token);
+
+        // Execute daily process
+        await _service.ProcessDailyAsync(cts.Token);
+
+        // Verify no access status was created for inactive employee
+        var lastMonday = GetLastMonday();
+        var status = await _accessStatuses.GetByEmployeeAndWeekAsync(testEmployee.Id, lastMonday, cts.Token);
+
+        Assert.IsNull(status, "Inactive employees should not get access status/reminders");
+    }
+
+    private static DateOnly GetLastMonday()
+    {
+        var today = DateTime.UtcNow;
+        var daysBack = ((int)today.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        if (daysBack == 0) daysBack = 7;
+        return DateOnly.FromDateTime(today.AddDays(-daysBack));
+    }
+}

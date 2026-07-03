@@ -1,0 +1,178 @@
+@startuml Use_Case_Diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam ActorBkgColor #FFE6E6
+skinparam ActorBorderColor #C40000
+skinparam UseCaseBackgroundColor #E1F5FE
+skinparam UseCaseBorderColor #0277BD
+skinparam NoteBackgroundColor #FFF9E6
+skinparam NoteBorderColor #FFA500
+skinparam ArrowColor #333333
+
+title PRM System - Use Case Diagram
+
+actor "Admin" as admin
+actor "Manager" as manager
+actor "Employee" as employee
+actor "System\n(Scheduler/AI)" as system
+
+rectangle "PRM System" {
+    
+    ' Authentication Use Cases
+    usecase "UC1: Login" as uc_login
+    usecase "UC2: Change Password" as uc_change_pwd
+    usecase "UC3: Reset User Password" as uc_reset_pwd
+    
+    ' User Management Use Cases (Admin)
+    usecase "UC4: Create User" as uc_create_user
+    usecase "UC5: Deactivate User" as uc_deactivate_user
+    usecase "UC6: View User List" as uc_view_users
+    usecase "UC7: Update User Role" as uc_update_role
+    
+    ' Employee Management Use Cases
+    usecase "UC8: Create Employee" as uc_create_emp
+    usecase "UC9: View Employee Details" as uc_view_emp
+    usecase "UC10: Update Employee Info" as uc_update_emp
+    usecase "UC11: View Team Members" as uc_view_team
+    usecase "UC12: Manage Employee Skills" as uc_manage_skills
+    
+    ' Project Management Use Cases
+    usecase "UC13: Create Project" as uc_create_proj
+    usecase "UC14: View Project Details" as uc_view_proj
+    usecase "UC15: Update Project Status" as uc_update_proj_status
+    usecase "UC16: View My Projects" as uc_view_my_proj
+    usecase "UC17: Add Milestone" as uc_add_milestone
+    usecase "UC18: Update Milestone Status" as uc_update_milestone
+    
+    ' Allocation Use Cases
+    usecase "UC19: Create Allocation" as uc_create_alloc
+    usecase "UC20: View Allocations" as uc_view_alloc
+    usecase "UC21: Update Allocation" as uc_update_alloc
+    usecase "UC22: Deactivate Allocation" as uc_deactivate_alloc
+    usecase "UC23: Check Resource Availability" as uc_check_availability
+    
+    ' Timesheet Use Cases
+    usecase "UC24: Submit Timesheet" as uc_submit_ts
+    usecase "UC25: View Timesheet" as uc_view_ts
+    usecase "UC26: Analyze Timesheet" as uc_analyze_ts
+    usecase "UC27: Validate Hours" as uc_validate_hours
+    
+    ' System Configuration Use Cases
+    usecase "UC28: View System Config" as uc_view_config
+    usecase "UC29: Update System Config" as uc_update_config
+    usecase "UC30: Configure AI Provider" as uc_config_ai
+    
+    ' AI & Automation Use Cases
+    usecase "UC31: Generate AI Insights" as uc_ai_insights
+    usecase "UC32: Run Scheduler Job" as uc_scheduler_job
+}
+
+' Authentication Flow - All Actors
+admin --> uc_login
+manager --> uc_login
+employee --> uc_login
+
+uc_login --> uc_change_pwd
+admin --> uc_change_pwd
+manager --> uc_change_pwd
+employee --> uc_change_pwd
+
+admin --> uc_reset_pwd
+
+' Admin Use Cases
+admin --> uc_create_user
+admin --> uc_deactivate_user
+admin --> uc_view_users
+admin --> uc_update_role
+
+admin --> uc_create_emp
+admin --> uc_update_emp
+
+admin --> uc_create_proj
+admin --> uc_update_proj_status
+admin --> uc_add_milestone
+
+admin --> uc_create_alloc
+admin --> uc_check_availability
+
+admin --> uc_view_config
+admin --> uc_update_config
+admin --> uc_config_ai
+
+' Manager Use Cases
+manager --> uc_view_users
+manager --> uc_view_team
+manager --> uc_view_emp
+
+manager --> uc_create_proj
+manager --> uc_view_my_proj
+manager --> uc_update_proj_status
+manager --> uc_add_milestone
+manager --> uc_update_milestone
+
+manager --> uc_create_alloc
+manager --> uc_view_alloc
+manager --> uc_update_alloc
+manager --> uc_check_availability
+
+manager --> uc_view_alloc
+manager --> uc_view_ts
+
+' Employee Use Cases
+employee --> uc_view_emp
+employee --> uc_manage_skills
+
+employee --> uc_view_my_proj
+employee --> uc_view_proj
+
+employee --> uc_view_alloc
+
+employee --> uc_submit_ts
+employee --> uc_view_ts
+
+' System/Scheduler Use Cases
+system --> uc_analyze_ts
+system --> uc_ai_insights
+system --> uc_scheduler_job
+
+' Include/Extend Relationships
+uc_submit_ts ..> uc_validate_hours : <<include>>
+uc_create_alloc ..> uc_check_availability : <<include>>
+uc_submit_ts ..> uc_analyze_ts : <<extend>>
+uc_analyze_ts ..> uc_ai_insights : <<include>>
+uc_scheduler_job ..> uc_analyze_ts : <<include>>
+uc_update_proj_status ..> uc_update_milestone : <<include>>
+
+note right of uc_login
+  Required for all users
+  Validates credentials
+  Generates JWT token
+  Sets ForcePasswordChange flag
+end note
+
+note right of uc_create_proj
+  Only Admin & Manager can create
+  Must assign a Manager (Employee)
+  Sets initial status to "Planning"
+end note
+
+note right of uc_create_alloc
+  Allocates employee to project
+  Checks resource availability
+  Sets utilization percentage
+  Validates date range
+end note
+
+note right of uc_submit_ts
+  Validates hours ≤ MaxWeeklyHours
+  Triggers AI analysis if enabled
+  Stores activity tags
+end note
+
+note right of uc_scheduler_job
+  Runs on configured interval
+  Analyzes timesheets
+  Generates insights
+end note
+
+@enduml
